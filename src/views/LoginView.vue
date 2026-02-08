@@ -62,17 +62,13 @@ const fillCredentials = (testEmail: string, testPassword: string) => {
     <div class="w-full max-w-md space-y-8">
       <!-- Logo -->
       <div class="flex justify-center">
-        <div class="w-32 h-32">
+        <div class="w-8 h-8">
           <KromaLogo />
         </div>
       </div>
 
       <!-- Login Card -->
-      <Card class="border-2">
-        <CardHeader class="space-y-1 text-center">
-          <CardTitle class="text-2xl font-bold">Welcome to Kroma</CardTitle>
-          <p class="text-sm text-muted-foreground">Sign in to your account to continue</p>
-        </CardHeader>
+      <Card>
         <CardContent class="space-y-4">
           <!-- Login Form -->
           <form @submit.prevent="handleLogin" class="space-y-4">
@@ -139,11 +135,6 @@ const fillCredentials = (testEmail: string, testPassword: string) => {
           </div>
         </CardContent>
       </Card>
-
-      <!-- Footer -->
-      <p class="text-center text-xs text-muted-foreground">
-        Kroma Print Management System v1.0
-      </p>
     </div>
   </div>
 </template>

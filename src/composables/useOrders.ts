@@ -21,7 +21,11 @@ export function useOrders() {
     updateOrderSource: (orderId: string, newSource: any) => store.updateOrderSource(orderId, newSource),
     updateOrderPaymentStatus: (orderId: string, newPaymentStatus: any) =>
       store.updateOrderPaymentStatus(orderId, newPaymentStatus),
+    updateOrderPaymentMethod: (orderId: string, newMethod: any) =>
+      store.updateOrderPaymentMethod(orderId, newMethod),
     updateItemPrintshop: (itemId: string, newPrintshopId: string | null) =>
       store.updateItemPrintshop(itemId, newPrintshopId),
+    updateItemDueDate: (itemId: string, newDueDate: string | null) =>
+      store.updateItemDueDate(itemId, newDueDate),
   }
 }

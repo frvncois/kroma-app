@@ -16,9 +16,12 @@ interface Props {
   columns: KanbanColumn[]
   visibleColumns: KanbanColumn[]
   items: OrderItemWithDetails[]
+  readonly?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  readonly: false
+})
 
 const emit = defineEmits<{
   'item-drop': [itemId: string, newStatus: ItemStatus, printshop: string | null]
@@ -43,7 +46,15 @@ const handleDrop = (status: ItemStatus, printshop: string | null) => {
 }
 
 const handleDragOver = (event: DragEvent) => {
-  event.preventDefault()
+  if (!props.readonly) {
+    event.preventDefault()
+  }
+}
+
+const handleDropWrapper = (status: ItemStatus, printshop: string | null) => {
+  if (!props.readonly) {
+    handleDrop(status, printshop)
+  }
 }
 
 const getColumnItems = (status: ItemStatus, printshop: string | null) => {
@@ -81,15 +92,16 @@ const getColumnItems = (status: ItemStatus, printshop: string | null) => {
           <!-- Column Items -->
           <div
             @dragover="handleDragOver"
-            @drop="handleDrop(column.status, column.printshop)"
+            @drop="handleDropWrapper(column.status, column.printshop)"
             class="flex-1 space-y-2 overflow-auto p-2 transition-colors"
-            :class="{ 'bg-accent/20': draggedItemId }"
+            :class="{ 'bg-accent/20': !readonly && draggedItemId }"
           >
             <KanbanCard
               v-for="item in getColumnItems(column.status, column.printshop)"
               :key="item.id"
               :item="item"
               :is-dragging="draggedItemId === item.id"
+              :readonly="readonly"
               @dragstart="handleDragStart(item.id)"
               @dragend="handleDragEnd"
               @click="emit('item-click', item.order_id)"

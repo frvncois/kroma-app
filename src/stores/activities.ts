@@ -9,22 +9,8 @@ export const useActivityStore = defineStore('activities', () => {
 
   // Getters
   const allActivities = computed(() => activities.value)
-  const unseenCount = computed(() => activities.value.filter((a) => !a.seen).length)
 
   // Actions
-  function toggleSeen(activityId: string) {
-    const activity = activities.value.find((a) => a.id === activityId)
-    if (activity) {
-      activity.seen = !activity.seen
-    }
-  }
-
-  function markAllAsSeen() {
-    activities.value.forEach((a) => {
-      a.seen = true
-    })
-  }
-
   function addActivity(activity: Activity) {
     // Add to beginning of array (most recent first)
     activities.value.unshift(activity)
@@ -35,10 +21,7 @@ export const useActivityStore = defineStore('activities', () => {
     activities,
     // Getters
     allActivities,
-    unseenCount,
     // Actions
-    toggleSeen,
-    markAllAsSeen,
     addActivity,
   }
 })

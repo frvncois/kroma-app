@@ -13,9 +13,7 @@ import {
   FileText,
   User,
   Settings,
-  Search,
-  Check,
-  RotateCcw
+  Search
 } from 'lucide-vue-next'
 
 interface Activity {
@@ -23,7 +21,6 @@ interface Activity {
   type: 'status_change' | 'note_added' | 'delivery' | 'pickup' | 'assignment' | 'order_created'
   timestamp: string
   user: string
-  seen: boolean
   item?: {
     id: string
     name: string
@@ -48,16 +45,10 @@ interface Props {
 
 interface Emits {
   (e: 'activity-click', orderId: string): void
-  (e: 'toggle-seen', activityId: string): void
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
-
-const handleToggleSeen = (activityId: string, event: Event) => {
-  event.stopPropagation()
-  emit('toggle-seen', activityId)
-}
 
 const getActivityIcon = (type: Activity['type']) => {
   switch (type) {
@@ -170,14 +161,8 @@ const filteredActivities = computed(() => {
     })
   }
 
-  // Sort: unseen first, then by timestamp (newest first within each group)
+  // Sort by timestamp (newest first)
   return [...filtered].sort((a, b) => {
-    // First sort by seen status (unseen first)
-    if (a.seen !== b.seen) {
-      return a.seen ? 1 : -1
-    }
-
-    // Then sort by timestamp (newest first)
     return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   })
 })
@@ -205,13 +190,10 @@ const filteredActivities = computed(() => {
         v-for="activity in filteredActivities"
         :key="activity.id"
         @click="activity.order && emit('activity-click', activity.order.id)"
-        :class="[
-          'relative rounded-lg border bg-card p-3 hover:bg-accent/50 transition-colors cursor-pointer',
-          !activity.seen && 'border-green-500 shadow-lg shadow-green-500/20'
-        ]"
+        class="relative rounded-lg border bg-card p-3 hover:bg-accent/50 transition-colors cursor-pointer"
       >
-        <!-- Row 1: Icon, Title, Button -->
-        <div class="flex gap-3 justify-between items-center mb-2">
+        <!-- Row 1: Icon, Title -->
+        <div class="flex gap-3 items-center mb-2">
           <div :class="['rounded-full p-2 flex-shrink-0', getActivityColor(activity.type)]">
             <component :is="getActivityIcon(activity.type)" class="h-4 w-4" />
           </div>
@@ -219,16 +201,6 @@ const filteredActivities = computed(() => {
           <div class="text-sm font-medium flex-1 min-w-0">
             {{ activity.details.message }}
           </div>
-
-          <!-- Toggle Seen Button -->
-          <button
-            @click="handleToggleSeen(activity.id, $event)"
-            class="flex-shrink-0 rounded-md p-2 transition-colors hover:bg-accent"
-            :title="activity.seen ? 'Mark as unseen' : 'Mark as seen'"
-          >
-            <Check v-if="!activity.seen" class="h-4 w-4 text-green-600" />
-            <RotateCcw v-else class="h-4 w-4 text-muted-foreground" />
-          </button>
         </div>
 
         <!-- Row 2: Content -->

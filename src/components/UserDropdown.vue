@@ -39,10 +39,10 @@ onClickOutside(dropdownRef, () => {
     <!-- Dropdown Button -->
     <button
       @click="toggleDropdown"
-      class="flex items-center gap-3 rounded-md border border-input bg-background px-4 py-2 text-sm shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+      class="flex items-center gap-8 px-4 text-sm transition-colors w-80 justify-between flex-1"
     >
-      <div class="flex items-center gap-2">
-        <div class="rounded-full bg-primary/10 p-1.5">
+      <div class="flex items-center gap-3 ">
+        <div class="rounded-full bg-muted p-1.5">
           <User class="h-4 w-4 text-primary" />
         </div>
         <div class="flex flex-col items-start">
@@ -64,12 +64,12 @@ onClickOutside(dropdownRef, () => {
     <!-- Dropdown Menu -->
     <div
       v-if="isOpen"
-      class="absolute right-0 mt-2 w-64 rounded-md border bg-popover shadow-lg z-50"
+      class="absolute right-0 mt-2 w-64 rounded-md border bg-popover z-50"
     >
       <!-- User Info -->
       <div class="p-4 border-b">
         <div class="flex items-center gap-3">
-          <div class="rounded-full bg-primary/10 p-2">
+          <div class="rounded-full bg-muted p-2">
             <User class="h-5 w-5 text-primary" />
           </div>
           <div class="flex-1 min-w-0">
@@ -77,12 +77,7 @@ onClickOutside(dropdownRef, () => {
             <div class="text-sm text-muted-foreground truncate">{{ authStore.currentUser?.email }}</div>
           </div>
         </div>
-        <div class="mt-2 pt-2 border-t">
-          <div class="flex items-center justify-between">
-            <span class="text-xs text-muted-foreground">Role</span>
-            <span class="text-xs font-medium">{{ roleLabel }}</span>
-          </div>
-        </div>
+
       </div>
 
       <!-- Logout -->

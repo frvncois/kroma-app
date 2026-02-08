@@ -7,25 +7,44 @@ import Badge from '@/components/ui/Badge.vue'
 interface Props {
   item: OrderItemWithDetails
   isDragging?: boolean
+  readonly?: boolean
 }
 
-defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  isDragging: false,
+  readonly: false
+})
 
 const emit = defineEmits<{
   'click': []
   'dragstart': []
   'dragend': []
 }>()
+
+const handleDragStart = () => {
+  if (!props.readonly) {
+    emit('dragstart')
+  }
+}
+
+const handleDragEnd = () => {
+  if (!props.readonly) {
+    emit('dragend')
+  }
+}
 </script>
 
 <template>
   <div
-    draggable="true"
-    @dragstart="emit('dragstart')"
-    @dragend="emit('dragend')"
+    :draggable="!readonly"
+    @dragstart="handleDragStart"
+    @dragend="handleDragEnd"
     @click="emit('click')"
-    class="cursor-move rounded-lg border bg-background p-2 shadow-sm transition-all hover:shadow-md space-y-1"
-    :class="{ 'opacity-50': isDragging }"
+    :class="[
+      'rounded-lg border bg-background p-2 shadow-sm transition-all hover:shadow-md space-y-1',
+      readonly ? 'cursor-pointer' : 'cursor-move',
+      { 'opacity-50': isDragging }
+    ]"
   >
     <!-- Line 1: Item title -->
     <div class="text-sm font-semibold truncate">{{ item.product_name }}</div>

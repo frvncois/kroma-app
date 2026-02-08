@@ -2,6 +2,8 @@
 import { ref, computed, watch } from 'vue'
 import { useOrders } from '@/composables/useOrders'
 import { usePrintshops } from '@/composables/usePrintshops'
+import { useToast } from '@/composables/useToast'
+import { formatStatus as libFormatStatus } from '@/lib/formatters'
 import type { PaymentStatus, PaymentMethod, ItemStatus, OrderNote, NoteDepartment } from '@/types'
 import Sheet from '@/components/ui/Sheet.vue'
 import Card from '@/components/ui/Card.vue'
@@ -21,6 +23,7 @@ interface Props {
   orderId?: string | null
   isOpen: boolean
   showPayment?: boolean
+  showFiles?: boolean
   side?: 'left' | 'right'
   zIndex?: number
 }
@@ -31,14 +34,23 @@ interface Emits {
 
 const props = withDefaults(defineProps<Props>(), {
   showPayment: true,
+  showFiles: true,
   side: 'right',
   zIndex: 60,
 })
 
 const emit = defineEmits<Emits>()
 
-const { getOrderById } = useOrders()
-const { getPrintshops } = usePrintshops()
+const {
+  getOrderById,
+  updateItemStatus,
+  updateItemPrintshop,
+  updateItemDueDate,
+  updateOrderPaymentStatus,
+  updateOrderPaymentMethod
+} = useOrders()
+const { getPrintshops, getPrintshopName } = usePrintshops()
+const { toast } = useToast()
 
 const order = computed(() => (props.orderId ? getOrderById(props.orderId) : null))
 
@@ -243,39 +255,85 @@ const paymentMethodOptions = [
 
 // Handle changes
 const handlePrintshopChange = (itemId: string, printshopId: string | null) => {
+  // Update local state for immediate UI feedback
   itemAssignments.value[itemId] = printshopId
-  console.log(`Updated item ${itemId} printshop to ${printshopId}`)
+
+  // Propagate to store
+  updateItemPrintshop(itemId, printshopId)
+
+  // Re-sync status from store (updateItemPrintshop may auto-set status to 'assigned')
+  const updatedOrder = getOrderById(props.orderId!)
+  if (updatedOrder) {
+    const updatedItem = updatedOrder.items.find(i => i.id === itemId)
+    if (updatedItem) {
+      itemStatuses.value[itemId] = updatedItem.status
+    }
+  }
+
+  toast({
+    title: 'Printshop updated',
+    description: `Assigned to ${getPrintshopName(printshopId)}`
+  })
 }
 
 const handleStatusChange = (itemId: string, status: ItemStatus) => {
-  const oldStatus = itemStatuses.value[itemId]
+  const oldStatus = itemStatuses.value[itemId] || 'new'
+
+  // Update local state for immediate UI feedback
   itemStatuses.value[itemId] = status
 
-  if (status === 'in_production' && oldStatus !== 'in_production') {
-    console.log(`Auto-setting production_start_date for item ${itemId} to now`)
-  }
-  if (status === 'ready' && oldStatus !== 'ready') {
-    console.log(`Auto-setting production_ready_date for item ${itemId} to now`)
-  }
+  // Propagate to store
+  updateItemStatus(itemId, status)
 
-  console.log(`Updated item ${itemId} status from ${oldStatus} to ${status}`)
+  toast({
+    title: 'Status updated',
+    description: `Changed from ${libFormatStatus(oldStatus)} to ${libFormatStatus(status)}`
+  })
 }
 
 const handleDueDateChange = (itemId: string, dueDate: string | null) => {
+  // Update local state for immediate UI feedback
   itemDueDates.value[itemId] = dueDate
-  console.log(`Updated item ${itemId} due_date to ${dueDate}`)
+
+  // Propagate to store
+  updateItemDueDate(itemId, dueDate)
+
+  toast({
+    title: 'Due date updated',
+    description: dueDate ? `Set to ${formatDateDisplay(dueDate)}` : 'Due date cleared'
+  })
 }
 
 const handlePaymentStatusChange = (status: string | string[]) => {
   const value = Array.isArray(status) ? status[0] : status
+
+  // Update local state for immediate UI feedback
   paymentStatus.value = value as PaymentStatus
-  console.log('Updated payment status to', value)
+
+  // Propagate to store
+  if (order.value) {
+    updateOrderPaymentStatus(order.value.id, value as PaymentStatus)
+    toast({
+      title: 'Payment status updated',
+      description: `Set to ${value}`
+    })
+  }
 }
 
 const handlePaymentMethodChange = (method: string | string[]) => {
   const value = Array.isArray(method) ? method[0] : method
+
+  // Update local state for immediate UI feedback
   paymentMethod.value = value as PaymentMethod
-  console.log('Updated payment method to', value)
+
+  // Propagate to store
+  if (order.value) {
+    updateOrderPaymentMethod(order.value.id, value as PaymentMethod)
+    toast({
+      title: 'Payment method updated',
+      description: `Set to ${value}`
+    })
+  }
 }
 
 // Note handlers
@@ -569,7 +627,7 @@ const departmentOptions = [
       </div>
 
       <!-- Files Section -->
-      <div>
+      <div v-if="showFiles">
         <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
           <Paperclip class="h-5 w-5" />
           Files ({{ files.length }})

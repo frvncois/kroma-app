@@ -3,7 +3,6 @@ export interface Activity {
   type: 'status_change' | 'note_added' | 'delivery' | 'pickup' | 'assignment' | 'order_created'
   timestamp: string
   user: string
-  seen: boolean
   item?: {
     id: string
     name: string

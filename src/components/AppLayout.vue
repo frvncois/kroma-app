@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { onClickOutside } from '@vueuse/core'
+import CommandSearch from './CommandSearch.vue'
 import UserDropdown from './UserDropdown.vue'
 import KromaLogo from '@/assets/KromaLogo.vue'
 import Toaster from './ui/Toaster.vue'
@@ -58,7 +59,7 @@ onClickOutside(mobileMenuRef, () => {
 <template>
   <div class="flex min-h-screen flex-col bg-background">
     <!-- Header -->
-    <header class="sticky top-0 z-50 w-full border-b bg-background px-10">
+    <header class="sticky top-0 z-50 w-full border-b bg-background pl-10 pr-2">
       <div class="mx-auto flex h-16 items-center justify-between">
         <!-- Left: Logo + Navigation (Desktop) -->
         <div class="flex gap-8 items-center">
@@ -84,8 +85,9 @@ onClickOutside(mobileMenuRef, () => {
           </nav>
         </div>
 
-        <!-- Right: User Dropdown (Desktop) -->
-        <div class="hidden md:block">
+        <!-- Right: Search + User Dropdown (Desktop) -->
+        <div class="hidden md:flex items-center gap-3">
+          <CommandSearch />
           <UserDropdown />
         </div>
 

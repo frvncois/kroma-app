@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useOrders } from '@/composables/useOrders'
 import { useOrderItems, type OrderItemWithDetails } from '@/composables/useOrderItems'
 import { usePrintshops } from '@/composables/usePrintshops'
@@ -29,6 +30,8 @@ import { createColumns } from './order-columns'
 import { Package, Settings, AlertCircle, Truck, CheckCircle, Clock, DollarSign } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
 
+const route = useRoute()
+const router = useRouter()
 const { getOrders, updateItemStatus, updateItemPrintshop } = useOrders()
 const { getItemsByPrintshop } = useOrderItems()
 const { getPrintshops, getPrintshopById } = usePrintshops()
@@ -85,20 +88,17 @@ const openOrderDetail = (orderId: string, side: 'left' | 'right' = 'right') => {
   isSheetOpen.value = true
 }
 
+// Handle openOrder query param from command palette
+watch(() => route.query.openOrder, (orderId) => {
+  if (orderId && typeof orderId === 'string') {
+    openOrderDetail(orderId)
+    // Clear the query param
+    router.replace({ query: { ...route.query, openOrder: undefined } })
+  }
+}, { immediate: true })
+
 const handleActivityClick = (orderId: string) => {
   openOrderDetail(orderId, 'left')
-}
-
-const handleToggleSeen = (activityId: string) => {
-  const activity = activities.value.find(a => a.id === activityId)
-  if (activity) {
-    activity.seen = !activity.seen
-    toast({
-      title: activity.seen ? 'Marked as seen' : 'Marked as unseen',
-      description: activity.details.message,
-      variant: 'success',
-    })
-  }
 }
 
 const openNewOrderSheet = () => {
@@ -457,7 +457,7 @@ const kanbanFilterConfigs = [
 
     <!-- Right Sidebar: Activity Feed -->
     <div class="fixed right-0 top-16 bottom-0 w-80 border-l bg-background overflow-y-auto">
-      <ActivityFeed :activities="activities" @activity-click="handleActivityClick" @toggle-seen="handleToggleSeen" />
+      <ActivityFeed :activities="activities" @activity-click="handleActivityClick" />
     </div>
 
     <!-- Order Detail Sheet -->

@@ -7,6 +7,7 @@ import type { Printshop } from '@/types'
 export const statusOptions: { value: string; label: string }[] = [
   { value: 'all', label: 'All Statuses' },
   { value: 'new', label: 'New' },
+  { value: 'assigned', label: 'Assigned' },
   { value: 'in_production', label: 'In Production' },
   { value: 'on_hold', label: 'On Hold' },
   { value: 'ready', label: 'Ready' },
@@ -145,4 +146,47 @@ export const kanbanColumns = [
 export const kanbanColumnOptions = [
   { value: 'all', label: 'All Columns' },
   ...kanbanColumns.map((col) => ({ value: col.id, label: col.title })),
+]
+
+/**
+ * Kanban column definitions for Printshop Manager view
+ * Simplified columns for production queue management
+ */
+export const printshopKanbanColumns = [
+  { id: 'assigned', title: 'Assigned', status: 'assigned' as ItemStatus, printshop: null },
+  { id: 'in_production', title: 'In Production', status: 'in_production' as ItemStatus, printshop: null },
+  { id: 'on_hold', title: 'On Hold', status: 'on_hold' as ItemStatus, printshop: null },
+  { id: 'ready', title: 'Ready', status: 'ready' as ItemStatus, printshop: null },
+]
+
+/**
+ * Status filter options for Printshop Manager (limited statuses)
+ */
+export const printshopStatusOptions = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'assigned', label: 'To Do' },
+  { value: 'in_production', label: 'In Production' },
+  { value: 'on_hold', label: 'On Hold' },
+  { value: 'ready', label: 'Ready' },
+]
+
+/**
+ * Kanban column definitions for Driver view
+ * Read-only columns for delivery tracking
+ */
+export const driverKanbanColumns = [
+  { id: 'ready', title: 'Ready for Pickup', status: 'ready' as ItemStatus, printshop: null },
+  { id: 'out_for_delivery', title: 'Out for Delivery', status: 'out_for_delivery' as ItemStatus, printshop: null },
+  { id: 'delivered', title: 'Delivered', status: 'delivered' as ItemStatus, printshop: null },
+]
+
+/**
+ * Status filter options for Driver (delivery-focused)
+ */
+export const driverStatusOptions = [
+  { value: 'all', label: 'All' },
+  { value: 'ready', label: 'Ready' },
+  { value: 'out_for_delivery', label: 'Out for Delivery' },
+  { value: 'delivered', label: 'Delivered' },
+  { value: 'picked_up', label: 'Picked Up' },
 ]

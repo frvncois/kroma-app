@@ -59,10 +59,17 @@ export function useOrderItems() {
     return itemsWithDetails.value.find((item) => item.id === id)
   }
 
+  const getItemsByShops = (shopIds: string[]) => {
+    return itemsWithDetails.value.filter((item) =>
+      item.assigned_printshop && shopIds.includes(item.assigned_printshop)
+    )
+  }
+
   return {
     getItemsByPrintshop,
     getItemsByStatus,
     getItemsByPrintshopAndStatus,
     getItemById,
+    getItemsByShops,
   }
 }

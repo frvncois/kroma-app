@@ -7,6 +7,8 @@ import { statusColorMap } from '@/lib/variants'
 interface Props {
   modelValue: ItemStatus
   itemId: string
+  allowedStatuses?: ItemStatus[]
+  customStatusOptions?: { value: ItemStatus; label: string }[]
 }
 
 interface Emits {
@@ -16,11 +18,18 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-const statusOptions = statusOptionsWithoutAll
+const statusOptions = computed(() => {
+  const baseOptions = props.customStatusOptions || statusOptionsWithoutAll
+
+  if (props.allowedStatuses && props.allowedStatuses.length > 0) {
+    return baseOptions.filter(opt => props.allowedStatuses!.includes(opt.value))
+  }
+  return baseOptions
+})
 
 const isOpen = ref(false)
 const containerRef = ref<HTMLElement>()
-const currentLabel = computed(() => statusOptions.find(opt => opt.value === props.modelValue)?.label || '')
+const currentLabel = computed(() => statusOptions.value.find(opt => opt.value === props.modelValue)?.label || '')
 
 const toggleDropdown = (e: Event) => {
   e.stopPropagation()
@@ -73,7 +82,7 @@ const beforeUnmount = () => {
     <!-- Dropdown menu -->
     <div
       v-if="isOpen"
-      class="absolute z-50 mt-1 left-0 right-0 rounded-lg border bg-popover shadow-lg"
+      class="absolute z-50 mt-1 left-0 w-full min-w-max rounded-lg border bg-popover shadow-lg"
       @click.stop
     >
       <div class="p-1">

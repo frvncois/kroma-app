@@ -1,10 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Order, OrderItem, ItemStatus, Customer, OrderSource, PaymentStatus } from '@/types'
+import type { Order, OrderItem, ItemStatus, Customer, OrderSource, PaymentStatus, PaymentMethod, Activity } from '@/types'
 import { orders as mockOrders } from '@/data/mock/orders'
 import { orderItems as mockOrderItems } from '@/data/mock/order-items'
 import { orderFiles as mockOrderFiles } from '@/data/mock/order-files'
 import { useCustomerStore } from './customers'
+import { useActivityStore } from './activities'
+import { usePrintshopStore } from './printshops'
+import { useAuthStore } from './auth'
 
 export interface OrderWithDetails extends Order {
   customer: Customer
@@ -86,6 +89,44 @@ export const useOrderStore = defineStore('orders', () => {
     return 0
   }
 
+  // Helper to create activity entries
+  function createActivity(
+    type: Activity['type'],
+    message: string,
+    item?: OrderItem,
+    orderId?: string,
+    extra?: Partial<Activity['details']>
+  ): Activity {
+    const authStore = useAuthStore()
+    const customerStore = useCustomerStore()
+
+    // Find the order for context
+    const order = orderId ? orders.value.find(o => o.id === orderId) :
+      item ? orders.value.find(o => o.id === item.order_id) : undefined
+    const customer = order ? customerStore.getCustomerById(order.customer_id) : undefined
+
+    return {
+      id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      type,
+      timestamp: new Date().toISOString(),
+      user: authStore.currentUser?.name || 'System',
+      item: item ? {
+        id: item.id,
+        name: `${item.product_name}${item.quantity > 1 ? ` - ${item.quantity}x` : ''}`,
+        orderId: item.order_id,
+      } : undefined,
+      order: order ? {
+        id: order.id,
+        externalId: order.external_id || undefined,
+        customer: customer?.name || 'Unknown',
+      } : undefined,
+      details: {
+        message,
+        ...extra,
+      },
+    }
+  }
+
   // Actions
   function updateItemStatus(itemId: string, newStatus: ItemStatus) {
     const item = orderItems.value.find((i) => i.id === itemId)
@@ -113,6 +154,32 @@ export const useOrderStore = defineStore('orders', () => {
       }
 
       console.log(`Updated item ${itemId} status from ${oldStatus} to ${newStatus}`)
+
+      // Create activity entry
+      const activityStore = useActivityStore()
+
+      // Determine activity type based on the new status
+      let activityType: Activity['type'] = 'status_change'
+      if (newStatus === 'delivered') activityType = 'delivery'
+      if (newStatus === 'picked_up') activityType = 'pickup'
+      if (newStatus === 'out_for_delivery') activityType = 'delivery'
+
+      // Build descriptive message
+      const formatStatusLabel = (s: string) => s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+      const message = activityType === 'status_change'
+        ? 'Status updated'
+        : activityType === 'delivery' && newStatus === 'out_for_delivery'
+          ? 'Out for delivery'
+          : activityType === 'delivery'
+            ? 'Successfully delivered'
+            : 'Item marked as picked up'
+
+      activityStore.addActivity(
+        createActivity(activityType, message, item, undefined, {
+          from: formatStatusLabel(oldStatus),
+          to: formatStatusLabel(newStatus),
+        })
+      )
     }
   }
 
@@ -145,6 +212,17 @@ export const useOrderStore = defineStore('orders', () => {
       order.source = newSource
       order.updated_at = new Date().toISOString()
       console.log(`Updated order ${orderId} source from ${oldSource} to ${newSource}`)
+
+      // Create activity entry
+      const activityStore = useActivityStore()
+      const formatSource = (s: string) => s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+
+      activityStore.addActivity(
+        createActivity('status_change', `Order source updated to ${formatSource(newSource)}`, undefined, orderId, {
+          from: formatSource(oldSource),
+          to: formatSource(newSource),
+        })
+      )
     }
   }
 
@@ -155,6 +233,17 @@ export const useOrderStore = defineStore('orders', () => {
       order.payment_status = newPaymentStatus
       order.updated_at = new Date().toISOString()
       console.log(`Updated order ${orderId} payment_status from ${oldPaymentStatus} to ${newPaymentStatus}`)
+
+      // Create activity entry
+      const activityStore = useActivityStore()
+      const formatLabel = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+      activityStore.addActivity(
+        createActivity('status_change', `Payment updated to ${formatLabel(newPaymentStatus)}`, undefined, orderId, {
+          from: formatLabel(oldPaymentStatus),
+          to: formatLabel(newPaymentStatus),
+        })
+      )
     }
   }
 
@@ -177,6 +266,17 @@ export const useOrderStore = defineStore('orders', () => {
       }
 
       console.log(`Updated item ${itemId} printshop from ${oldPrintshop || 'unassigned'} to ${newPrintshopId || 'unassigned'}`)
+
+      // Create activity entry for printshop assignment
+      if (newPrintshopId) {
+        const activityStore = useActivityStore()
+        const printshopStore = usePrintshopStore()
+        const shopName = printshopStore.getPrintshopName(newPrintshopId)
+
+        activityStore.addActivity(
+          createActivity('assignment', `Assigned to ${shopName}`, item)
+        )
+      }
     }
   }
 
@@ -186,6 +286,32 @@ export const useOrderStore = defineStore('orders', () => {
       item.due_date = newDueDate
       item.updated_at = new Date().toISOString()
       console.log(`Updated item ${itemId} due_date to ${newDueDate}`)
+
+      // Create activity entry
+      const activityStore = useActivityStore()
+      const formatDate = (date: string | null) => {
+        if (!date) return 'cleared'
+        return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      }
+
+      activityStore.addActivity(
+        createActivity('status_change', `Due date ${newDueDate ? 'set to ' + formatDate(newDueDate) : 'cleared'}`, item)
+      )
+    }
+  }
+
+  function updateOrderPaymentMethod(orderId: string, newMethod: PaymentMethod) {
+    const order = orders.value.find((o) => o.id === orderId)
+    if (order) {
+      order.payment_method = newMethod
+      order.updated_at = new Date().toISOString()
+      console.log(`Updated order ${orderId} payment_method to ${newMethod}`)
+
+      // Create activity entry
+      const activityStore = useActivityStore()
+      activityStore.addActivity(
+        createActivity('status_change', `Payment method changed to ${newMethod}`, undefined, orderId)
+      )
     }
   }
 
@@ -204,6 +330,7 @@ export const useOrderStore = defineStore('orders', () => {
     updatePrintshopItemsStatus,
     updateOrderSource,
     updateOrderPaymentStatus,
+    updateOrderPaymentMethod,
     updateItemPrintshop,
     updateItemDueDate,
   }

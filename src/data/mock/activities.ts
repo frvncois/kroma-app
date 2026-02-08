@@ -20,7 +20,6 @@ export const activities: Activity[] = [
       externalId: 'IQ-2024-001',
       customer: 'Acme Corp'
     },
-    seen: false,
     details: {
       message: 'Item marked as picked up'
     }
@@ -40,7 +39,6 @@ export const activities: Activity[] = [
       externalId: 'PF-2024-042',
       customer: 'Tech Startup Inc'
     },
-    seen: false,
     details: {
       message: 'Status updated',
       from: 'in production',
@@ -62,7 +60,6 @@ export const activities: Activity[] = [
       externalId: 'PROP-2024-089',
       customer: 'City Museum'
     },
-    seen: false,
     details: {
       message: 'Note added to item',
       note: 'Customer requested matte finish instead of glossy. Updated specs accordingly.'
@@ -83,7 +80,6 @@ export const activities: Activity[] = [
       externalId: 'SP-2024-156',
       customer: 'Real Estate Agency'
     },
-    seen: false,
     details: {
       message: 'Out for delivery'
     }
@@ -103,7 +99,6 @@ export const activities: Activity[] = [
       externalId: 'IQ-2024-002',
       customer: 'Local Coffee Shop'
     },
-    seen: false,
     details: {
       message: 'Assigned to In House printshop'
     }
@@ -123,7 +118,6 @@ export const activities: Activity[] = [
       externalId: 'PF-2024-043',
       customer: 'Marketing Agency'
     },
-    seen: false,
     details: {
       message: 'Status updated',
       from: 'assigned',
@@ -140,7 +134,6 @@ export const activities: Activity[] = [
       externalId: 'IQ-2024-003',
       customer: 'Fashion Boutique'
     },
-    seen: false,
     details: {
       message: 'New order received'
     }
@@ -160,7 +153,6 @@ export const activities: Activity[] = [
       externalId: 'PROP-2024-090',
       customer: 'Delivery Service'
     },
-    seen: false,
     details: {
       message: 'Note added to item',
       note: 'Customer will drop off vehicle on Monday morning. Confirmed availability with Victor.'
@@ -181,7 +173,6 @@ export const activities: Activity[] = [
       externalId: 'SP-2024-157',
       customer: 'Photography Studio'
     },
-    seen: false,
     details: {
       message: 'Item marked as picked up'
     }
@@ -201,7 +192,6 @@ export const activities: Activity[] = [
       externalId: 'IQ-2024-004',
       customer: 'Sports Team'
     },
-    seen: false,
     details: {
       message: 'Status updated',
       from: 'in production',
@@ -223,7 +213,6 @@ export const activities: Activity[] = [
       externalId: 'PF-2024-044',
       customer: 'Restaurant Chain'
     },
-    seen: false,
     details: {
       message: 'Successfully delivered'
     }
@@ -237,7 +226,6 @@ export const activities: Activity[] = [
       id: 'order-12',
       customer: 'Non-Profit Organization'
     },
-    seen: false,
     details: {
       message: 'New order received'
     }
