@@ -2,7 +2,6 @@
 import { ref, computed } from 'vue'
 import { formatDistanceToNow } from 'date-fns'
 import Badge from '@/components/ui/Badge.vue'
-import Card from '@/components/ui/Card.vue'
 import Input from '@/components/ui/Input.vue'
 import {
   Package,
@@ -10,7 +9,6 @@ import {
   Truck,
   CheckCircle2,
   Clock,
-  XCircle,
   MapPin,
   FileText,
   User,

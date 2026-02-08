@@ -1,25 +1,4 @@
-export type OrderSource = 'impression_quebec' | 'promo_flash' | 'propaganda' | 'sticker_pusher' | 'studio_c' | 'other'
-export type DeliveryMethod = 'delivery' | 'customer_pickup'
-export type PaymentStatus = 'paid' | 'unpaid' | 'partial'
-export type PaymentMethod = 'shopify' | 'cash' | 'cheque' | 'etransfer' | 'invoice' | 'other'
-
-export interface Order {
-  id: string
-  customer_id: string
-  source: OrderSource
-  external_id: string | null
-  delivery_method: DeliveryMethod
-  payment_status: PaymentStatus
-  payment_method: PaymentMethod
-  amount_total: number
-  amount_paid: number
-  notes: string
-  files_count: number
-  comments_count: number
-  delivery_date: string | null
-  created_at: string
-  updated_at: string
-}
+import type { Order } from '@/types'
 
 export const orders: Order[] = [
   {
@@ -33,9 +12,6 @@ export const orders: Order[] = [
     amount_total: 250.0,
     amount_paid: 250.0,
     notes: 'Corporate stationery package',
-    files_count: 2,
-    comments_count: 1,
-    delivery_date: '2024-01-22',
     created_at: '2024-01-20T09:00:00Z',
     updated_at: '2024-01-22T16:30:00Z',
   },
@@ -50,9 +26,6 @@ export const orders: Order[] = [
     amount_total: 450.0,
     amount_paid: 225.0,
     notes: 'Event signage - paid 50% deposit',
-    files_count: 3,
-    comments_count: 2,
-    delivery_date: '2024-01-25',
     created_at: '2024-01-21T10:30:00Z',
     updated_at: '2024-01-22T15:00:00Z',
   },
@@ -67,9 +40,6 @@ export const orders: Order[] = [
     amount_total: 180.0,
     amount_paid: 180.0,
     notes: '',
-    files_count: 1,
-    comments_count: 0,
-    delivery_date: '2024-01-26',
     created_at: '2024-01-22T08:15:00Z',
     updated_at: '2024-01-23T11:00:00Z',
   },
@@ -84,9 +54,6 @@ export const orders: Order[] = [
     amount_total: 650.0,
     amount_paid: 0,
     notes: 'Marketing materials - needs approval',
-    files_count: 4,
-    comments_count: 3,
-    delivery_date: '2024-01-20',
     created_at: '2024-01-22T11:00:00Z',
     updated_at: '2024-01-23T09:30:00Z',
   },
@@ -101,9 +68,6 @@ export const orders: Order[] = [
     amount_total: 320.0,
     amount_paid: 320.0,
     notes: '',
-    files_count: 2,
-    comments_count: 0,
-    delivery_date: '2024-01-28',
     created_at: '2024-01-23T09:00:00Z',
     updated_at: '2024-01-23T09:00:00Z',
   },
@@ -118,9 +82,6 @@ export const orders: Order[] = [
     amount_total: 275.0,
     amount_paid: 0,
     notes: 'COD - collect on delivery',
-    files_count: 5,
-    comments_count: 1,
-    delivery_date: '2024-01-30',
     created_at: '2024-01-23T13:00:00Z',
     updated_at: '2024-01-23T13:00:00Z',
   },
@@ -135,9 +96,6 @@ export const orders: Order[] = [
     amount_total: 85.0,
     amount_paid: 85.0,
     notes: 'Customer pickup at Shop B',
-    files_count: 1,
-    comments_count: 0,
-    delivery_date: '2024-01-21',
     created_at: '2024-01-19T14:00:00Z',
     updated_at: '2024-01-21T10:00:00Z',
   },
@@ -152,9 +110,6 @@ export const orders: Order[] = [
     amount_total: 890.0,
     amount_paid: 890.0,
     notes: 'Promotional items for trade show',
-    files_count: 3,
-    comments_count: 2,
-    delivery_date: '2024-01-24',
     created_at: '2024-01-21T15:00:00Z',
     updated_at: '2024-01-23T14:00:00Z',
   },
@@ -169,9 +124,6 @@ export const orders: Order[] = [
     amount_total: 540.0,
     amount_paid: 0,
     notes: 'NET 30 payment terms',
-    files_count: 2,
-    comments_count: 1,
-    delivery_date: '2024-01-27',
     created_at: '2024-01-22T16:00:00Z',
     updated_at: '2024-01-23T10:00:00Z',
   },
@@ -186,9 +138,6 @@ export const orders: Order[] = [
     amount_total: 195.0,
     amount_paid: 195.0,
     notes: 'Canceled by customer',
-    files_count: 1,
-    comments_count: 0,
-    delivery_date: '2024-01-23',
     created_at: '2024-01-20T12:00:00Z',
     updated_at: '2024-01-21T09:00:00Z',
   },

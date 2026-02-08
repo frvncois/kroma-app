@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { useRole } from '@/composables/useRole'
+import { useAuthStore } from '@/stores/auth'
 import { onClickOutside } from '@vueuse/core'
 import UserDropdown from './UserDropdown.vue'
 import KromaLogo from '@/assets/KromaLogo.vue'
 import Toaster from './ui/Toaster.vue'
 
-const { currentRole } = useRole()
+const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -21,21 +21,26 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
+  // Manager routes
   { to: '/manager/orders', label: 'Orders', roles: ['manager'] },
   { to: '/manager/customers', label: 'Customers', roles: ['manager'] },
+
+  // Printshop Manager routes
+  { to: '/printshop/queue', label: 'Production Queue', roles: ['printshop_manager'] },
+
+  // Driver routes
+  { to: '/driver/deliveries', label: 'Deliveries', roles: ['driver'] },
 ]
 
 const visibleNavItems = computed(() => {
-  return navItems.filter((item) => item.roles.includes(currentRole.value))
+  const userRole = authStore.userRole
+  if (!userRole) return []
+  return navItems.filter((item) => item.roles.includes(userRole))
 })
 
 const isActive = (path: string) => {
   return route.path.startsWith(path)
 }
-
-const homeRoute = computed(() => {
-  return '/manager/orders'
-})
 
 const toggleMobileMenu = () => {
   isMobileMenuOpen.value = !isMobileMenuOpen.value
@@ -55,10 +60,28 @@ onClickOutside(mobileMenuRef, () => {
     <!-- Header -->
     <header class="sticky top-0 z-50 w-full border-b bg-background px-10">
       <div class="mx-auto flex h-16 items-center justify-between">
-        <!-- Left: Logo -->
-        <div class="flex gap-4 items-center">
-            
-          <div class="w-6"><KromaLogo/></div> <span class="font-semibold tracking-wider">KROMA</span>
+        <!-- Left: Logo + Navigation (Desktop) -->
+        <div class="flex gap-8 items-center">
+          <div class="flex gap-4 items-center">
+            <div class="w-6"><KromaLogo /></div>
+            <span class="font-semibold tracking-wider">KROMA</span>
+          </div>
+
+          <!-- Desktop Navigation -->
+          <nav class="hidden md:flex gap-6">
+            <RouterLink
+              v-for="item in visibleNavItems"
+              :key="item.to"
+              :to="item.to"
+              class="text-sm font-medium transition-colors hover:text-foreground"
+              :class="{
+                'text-foreground': isActive(item.to),
+                'text-muted-foreground': !isActive(item.to),
+              }"
+            >
+              {{ item.label }}
+            </RouterLink>
+          </nav>
         </div>
 
         <!-- Right: User Dropdown (Desktop) -->
@@ -134,7 +157,7 @@ onClickOutside(mobileMenuRef, () => {
 
     <!-- Main Content -->
     <main class="flex flex-1">
-        <RouterView />
+      <RouterView />
     </main>
 
     <!-- Toast Notifications -->

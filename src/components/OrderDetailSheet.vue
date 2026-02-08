@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useOrders } from '@/composables/useOrders'
-import { printshops } from '@/data/mock/printshops'
-import type { PaymentStatus, PaymentMethod } from '@/data/mock/orders'
-import type { ItemStatus } from '@/data/mock/order-items'
+import { usePrintshops } from '@/composables/usePrintshops'
+import type { PaymentStatus, PaymentMethod, ItemStatus, OrderNote, NoteDepartment } from '@/types'
 import Sheet from '@/components/ui/Sheet.vue'
 import Card from '@/components/ui/Card.vue'
 import CardContent from '@/components/ui/CardContent.vue'
@@ -14,7 +13,9 @@ import DateInput from '@/components/ui/DateInput.vue'
 import Button from '@/components/ui/Button.vue'
 import FilterSelect from '@/components/ui/FilterSelect.vue'
 import ItemStatusCombobox from '@/components/ItemStatusCombobox.vue'
-import { User, Package, MessageSquare, Paperclip, ChevronDown, ChevronRight, FileText, Download, Edit2, Trash2 } from 'lucide-vue-next'
+import ItemControls from '@/components/ItemControls.vue'
+import NotesSection from '@/components/NotesSection.vue'
+import { User, Package, Paperclip, ChevronDown, ChevronRight, FileText, Download } from 'lucide-vue-next'
 
 interface Props {
   orderId?: string | null
@@ -37,6 +38,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<Emits>()
 
 const { getOrderById } = useOrders()
+const { getPrintshops } = usePrintshops()
 
 const order = computed(() => (props.orderId ? getOrderById(props.orderId) : null))
 
@@ -51,17 +53,6 @@ const itemStatuses = ref<Record<string, ItemStatus>>({})
 const itemDueDates = ref<Record<string, string | null>>({})
 
 // Notes management
-type NoteDepartment = 'printshop' | 'delivery' | 'billing' | 'everyone'
-
-interface OrderNote {
-  id: string
-  content: string
-  departments: NoteDepartment[]
-  created_at: string
-  created_by: string
-  item_reference: string | null
-}
-
 const notes = ref<OrderNote[]>([
   {
     id: 'note-1',
@@ -88,13 +79,6 @@ const notes = ref<OrderNote[]>([
     item_reference: null
   }
 ])
-const newNoteContent = ref('')
-const selectedDepartment = ref<NoteDepartment>('everyone')
-const selectedItemReference = ref<string>('order')
-
-// Edit note state
-const editingNoteId = ref<string | null>(null)
-const editingNoteContent = ref('')
 
 // Dummy files
 interface OrderFile {
@@ -235,7 +219,7 @@ const formatDateDisplay = (dateString: string | null): string => {
 // Printshop options for FilterSelect
 const printshopOptions = computed(() => [
   { value: '', label: 'Unassigned' },
-  ...printshops.map((shop) => ({
+  ...getPrintshops().map((shop) => ({
     value: shop.id,
     label: shop.name,
   })),
@@ -258,10 +242,9 @@ const paymentMethodOptions = [
 ]
 
 // Handle changes
-const handlePrintshopChange = (itemId: string, printshopId: string | string[]) => {
-  const value = Array.isArray(printshopId) ? (printshopId[0] || '') : printshopId
-  itemAssignments.value[itemId] = value === '' ? null : value
-  console.log(`Updated item ${itemId} printshop to ${value}`)
+const handlePrintshopChange = (itemId: string, printshopId: string | null) => {
+  itemAssignments.value[itemId] = printshopId
+  console.log(`Updated item ${itemId} printshop to ${printshopId}`)
 }
 
 const handleStatusChange = (itemId: string, status: ItemStatus) => {
@@ -295,49 +278,29 @@ const handlePaymentMethodChange = (method: string | string[]) => {
   console.log('Updated payment method to', value)
 }
 
-const addNote = () => {
-  if (!newNoteContent.value.trim() || !selectedDepartment.value) return
-
+// Note handlers
+const handleAddNote = (content: string, departments: NoteDepartment[], itemReference: string | null) => {
   const note: OrderNote = {
     id: `note-${Date.now()}`,
-    content: newNoteContent.value,
-    departments: [selectedDepartment.value],
+    content,
+    departments,
     created_at: new Date().toISOString(),
     created_by: 'Current User', // TODO: Replace with actual user
-    item_reference: selectedItemReference.value === 'order' ? null : selectedItemReference.value
+    item_reference: itemReference
   }
 
   notes.value.unshift(note)
-  newNoteContent.value = ''
-  selectedDepartment.value = 'everyone'
-  selectedItemReference.value = 'order'
-
   console.log('Added note:', note)
 }
 
-const startEditNote = (note: OrderNote) => {
-  editingNoteId.value = note.id
-  editingNoteContent.value = note.content
-}
-
-const saveEditNote = () => {
-  if (!editingNoteId.value || !editingNoteContent.value.trim()) return
-
-  const noteIndex = notes.value.findIndex(n => n.id === editingNoteId.value)
-  if (noteIndex !== -1) {
-    notes.value[noteIndex].content = editingNoteContent.value
+const handleEditNote = (noteId: string, newContent: string) => {
+  const note = notes.value.find(n => n.id === noteId)
+  if (note) {
+    note.content = newContent
   }
-
-  editingNoteId.value = null
-  editingNoteContent.value = ''
 }
 
-const cancelEditNote = () => {
-  editingNoteId.value = null
-  editingNoteContent.value = ''
-}
-
-const deleteNote = (noteId: string) => {
+const handleDeleteNote = (noteId: string) => {
   const index = notes.value.findIndex(n => n.id === noteId)
   if (index !== -1) {
     notes.value.splice(index, 1)
@@ -360,30 +323,6 @@ const departmentOptions = [
   { value: 'billing', label: 'Billing' },
   { value: 'everyone', label: 'Everyone' },
 ]
-
-const formatNoteDate = (dateString: string): string => {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-const getDepartmentLabel = (dept: NoteDepartment): string => {
-  switch (dept) {
-    case 'printshop':
-      return 'Printshop Manager'
-    case 'delivery':
-      return 'Delivery'
-    case 'billing':
-      return 'Billing Department'
-    case 'everyone':
-      return 'Everyone'
-  }
-}
 </script>
 
 <template>
@@ -548,44 +487,30 @@ const getDepartmentLabel = (dept: NoteDepartment): string => {
                   <span class="font-medium">Notes:</span> {{ item.notes }}
                 </div>
 
-                <div class="grid gap-3 md:grid-cols-2">
-                  <div>
-                    <Label class="text-xs text-muted-foreground mb-1 block"
-                      >Assigned Printshop</Label
-                    >
-                    <FilterSelect
-                      :model-value="itemAssignments[item.id] || ''"
-                      @update:model-value="(val) => handlePrintshopChange(item.id, val)"
-                      :options="printshopOptions"
-                    />
-                  </div>
+                <ItemControls
+                  :item="{
+                    id: item.id,
+                    status: itemStatuses[item.id] || 'new',
+                    assigned_printshop: itemAssignments[item.id] ?? null,
+                    due_date: itemDueDates[item.id] ?? null,
+                    delivery_date: item.delivery_date ?? null,
+                    production_start_date: item.production_start_date ?? null,
+                    production_ready_date: item.production_ready_date ?? null,
+                  }"
+                  :show-printshop="true"
+                  :show-status="true"
+                  :show-due-date="true"
+                  :show-timeline="false"
+                  layout="inline"
+                  @update:status="handleStatusChange"
+                  @update:printshop="handlePrintshopChange"
+                  @update:due-date="handleDueDateChange"
+                />
 
-                  <div>
-                    <Label class="text-xs text-muted-foreground mb-1 block"
-                      >Status</Label
-                    >
-                    <ItemStatusCombobox
-                      :model-value="itemStatuses[item.id] || 'new'"
-                      :item-id="item.id"
-                      @update:model-value="handleStatusChange"
-                    />
-                  </div>
-                </div>
-
-                <!-- Date Fields -->
+                <!-- Production Date Fields (Read-only) -->
                 <div class="space-y-3 rounded-lg border bg-muted/30 p-3">
-                  <div class="text-sm font-medium">Dates</div>
-                  <div class="grid gap-3 md:grid-cols-3">
-                    <div>
-                      <Label class="text-xs text-muted-foreground mb-1 block"
-                        >Due Date</Label
-                      >
-                      <DateInput
-                        :model-value="itemDueDates[item.id]"
-                        @update:model-value="(val) => handleDueDateChange(item.id, val)"
-                      />
-                    </div>
-
+                  <div class="text-sm font-medium">Production Dates</div>
+                  <div class="grid gap-3 md:grid-cols-2">
                     <div>
                       <Label class="text-xs text-muted-foreground">Production Start</Label>
                       <div class="mt-1 flex h-9 items-center rounded-md border bg-muted px-3 text-sm">
@@ -693,124 +618,14 @@ const getDepartmentLabel = (dept: NoteDepartment): string => {
       </div>
 
       <!-- Notes Section -->
-      <div>
-        <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-          <MessageSquare class="h-5 w-5" />
-          Notes ({{ notes.length }})
-        </h3>
-
-        <Card>
-          <CardContent class="p-4">
-            <!-- Existing Notes -->
-            <div v-if="notes.length === 0" class="text-sm text-muted-foreground text-center py-8">
-              No notes yet
-            </div>
-            <div v-else class="space-y-3 mb-4">
-              <div
-                v-for="note in notes"
-                :key="note.id"
-                class="border-b pb-3 last:border-b-0 last:pb-0"
-              >
-                <div class="flex items-start justify-between mb-2">
-                  <div class="flex-1">
-                    <div class="flex items-center gap-2">
-                      <div class="text-sm font-semibold">{{ note.created_by }}</div>
-                      <Badge v-if="note.item_reference" variant="outline" class="text-xs">
-                        {{ note.item_reference }}
-                      </Badge>
-                    </div>
-                    <div class="text-xs text-muted-foreground">{{ formatNoteDate(note.created_at) }}</div>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <div class="flex flex-wrap gap-1">
-                      <Badge
-                        v-for="dept in note.departments"
-                        :key="dept"
-                        variant="secondary"
-                        class="text-xs"
-                      >
-                        {{ getDepartmentLabel(dept) }}
-                      </Badge>
-                    </div>
-                    <div class="flex gap-1">
-                      <button
-                        @click="startEditNote(note)"
-                        class="rounded-md p-1 transition-colors hover:bg-accent"
-                        title="Edit note"
-                      >
-                        <Edit2 class="h-3 w-3 text-muted-foreground" />
-                      </button>
-                      <button
-                        @click="deleteNote(note.id)"
-                        class="rounded-md p-1 transition-colors hover:bg-destructive/10"
-                        title="Delete note"
-                      >
-                        <Trash2 class="h-3 w-3 text-destructive" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Edit mode -->
-                <div v-if="editingNoteId === note.id" class="space-y-2">
-                  <Textarea
-                    v-model="editingNoteContent"
-                    :rows="3"
-                  />
-                  <div class="flex gap-2 justify-end">
-                    <Button
-                      @click="cancelEditNote"
-                      variant="outline"
-                      size="sm"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      @click="saveEditNote"
-                      size="sm"
-                      :disabled="!editingNoteContent.trim()"
-                    >
-                      Save
-                    </Button>
-                  </div>
-                </div>
-
-                <!-- View mode -->
-                <div v-else class="text-sm whitespace-pre-wrap">{{ note.content }}</div>
-              </div>
-            </div>
-
-            <!-- Add Note Form -->
-            <div class="border-t pt-4 space-y-3">
-              <Textarea
-                v-model="newNoteContent"
-                :rows="3"
-                placeholder="Write a note..."
-              />
-              <div class="flex items-center gap-2">
-                <FilterSelect
-                  v-model="selectedItemReference"
-                  :options="itemReferenceOptions"
-                  class="w-48"
-                />
-                <FilterSelect
-                  v-model="selectedDepartment"
-                  :options="departmentOptions"
-                  class="w-40"
-                />
-                <Button
-                  @click="addNote"
-                  :disabled="!newNoteContent.trim()"
-                  size="sm"
-                  class="ml-auto"
-                >
-                  Add Note
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <NotesSection
+        :notes="notes"
+        :item-options="itemReferenceOptions"
+        :department-options="departmentOptions"
+        @add-note="handleAddNote"
+        @edit-note="handleEditNote"
+        @delete-note="handleDeleteNote"
+      />
 
     </div>
   </Sheet>

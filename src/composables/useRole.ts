@@ -1,6 +1,8 @@
 import { ref, watch } from 'vue'
+import type { UserRole } from '@/types'
 
-export type UserRole = 'manager' | 'printshop_manager' | 'driver'
+// Re-export UserRole for components that need it
+export type { UserRole }
 
 const ROLE_STORAGE_KEY = 'kroma_user_role'
 

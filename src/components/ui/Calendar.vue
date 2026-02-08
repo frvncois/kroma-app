@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { CalendarDate, DateValue, toCalendarDate } from '@internationalized/date'
+import { CalendarDate, toCalendarDate } from '@internationalized/date'
+import type { DateValue } from '@internationalized/date'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import {
   CalendarRoot,
@@ -87,7 +88,7 @@ const calendarValue = computed({
     </CalendarHeader>
 
     <div class="flex flex-col gap-y-4 mt-4">
-      <CalendarGrid v-slot="{ grid, weekDays }" class="w-full border-collapse space-y-1">
+      <CalendarGrid v-slot="{ grid, weekDays }: any" class="w-full border-collapse space-y-1">
         <CalendarGridHead>
           <CalendarGridRow class="flex">
             <CalendarHeadCell

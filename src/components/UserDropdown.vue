@@ -1,47 +1,32 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useRole, type UserRole } from '@/composables/useRole'
+import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
 import { onClickOutside } from '@vueuse/core'
+import { User, LogOut } from 'lucide-vue-next'
 
-const { currentRole, setRole } = useRole()
+const authStore = useAuthStore()
 const router = useRouter()
 
 const isOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 
-const roles: { value: UserRole; label: string }[] = [
-  { value: 'manager', label: 'Manager' },
-  { value: 'printshop_manager', label: 'Printshop Manager' },
-  { value: 'driver', label: 'Driver' },
-]
-
-const currentRoleLabel = computed(() => {
-  return roles.find((r) => r.value === currentRole.value)?.label || 'Unknown'
+const roleLabel = computed(() => {
+  const role = authStore.userRole
+  if (role === 'manager') return 'Manager'
+  if (role === 'printshop_manager') return 'Printshop Manager'
+  if (role === 'driver') return 'Driver'
+  return 'Unknown'
 })
 
 const toggleDropdown = () => {
   isOpen.value = !isOpen.value
 }
 
-const handleRoleChange = (newRole: UserRole) => {
-  setRole(newRole)
+const handleLogout = () => {
+  authStore.logout()
   isOpen.value = false
-
-  // Redirect to appropriate default page for the role
-  if (newRole === 'manager') {
-    router.push('/manager/orders')
-  } else if (newRole === 'printshop_manager') {
-    router.push('/printshop')
-  } else if (newRole === 'driver') {
-    router.push('/driver')
-  }
-}
-
-const handleSignOut = () => {
-  console.log('Sign out clicked')
-  isOpen.value = false
-  // In real app: call auth.signOut() and redirect to login
+  router.push('/login')
 }
 
 onClickOutside(dropdownRef, () => {
@@ -54,9 +39,17 @@ onClickOutside(dropdownRef, () => {
     <!-- Dropdown Button -->
     <button
       @click="toggleDropdown"
-      class="flex items-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+      class="flex items-center gap-3 rounded-md border border-input bg-background px-4 py-2 text-sm shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
     >
-      {{ currentRoleLabel }}
+      <div class="flex items-center gap-2">
+        <div class="rounded-full bg-primary/10 p-1.5">
+          <User class="h-4 w-4 text-primary" />
+        </div>
+        <div class="flex flex-col items-start">
+          <div class="font-medium leading-none">{{ authStore.currentUser?.name }}</div>
+          <div class="text-xs text-muted-foreground mt-0.5">{{ roleLabel }}</div>
+        </div>
+      </div>
       <svg
         class="h-4 w-4 transition-transform"
         :class="{ 'rotate-180': isOpen }"
@@ -71,48 +64,35 @@ onClickOutside(dropdownRef, () => {
     <!-- Dropdown Menu -->
     <div
       v-if="isOpen"
-      class="absolute right-0 mt-2 w-56 rounded-md border bg-popover shadow-lg"
+      class="absolute right-0 mt-2 w-64 rounded-md border bg-popover shadow-lg z-50"
     >
-      <!-- Switch Role Section -->
-      <div class="p-2">
-        <div class="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Switch Role</div>
-        <button
-          v-for="role in roles"
-          :key="role.value"
-          @click="handleRoleChange(role.value)"
-          class="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
-          :class="{
-            'bg-accent/50': role.value === currentRole,
-          }"
-        >
-          <span>{{ role.label }}</span>
-          <svg
-            v-if="role.value === currentRole"
-            class="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M5 13l4 4L19 7"
-            />
-          </svg>
-        </button>
+      <!-- User Info -->
+      <div class="p-4 border-b">
+        <div class="flex items-center gap-3">
+          <div class="rounded-full bg-primary/10 p-2">
+            <User class="h-5 w-5 text-primary" />
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold truncate">{{ authStore.currentUser?.name }}</div>
+            <div class="text-sm text-muted-foreground truncate">{{ authStore.currentUser?.email }}</div>
+          </div>
+        </div>
+        <div class="mt-2 pt-2 border-t">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-muted-foreground">Role</span>
+            <span class="text-xs font-medium">{{ roleLabel }}</span>
+          </div>
+        </div>
       </div>
 
-      <!-- Divider -->
-      <div class="my-1 h-px bg-border"></div>
-
-      <!-- Sign Out -->
+      <!-- Logout -->
       <div class="p-2">
         <button
-          @click="handleSignOut"
-          class="flex w-full items-center rounded-sm px-2 py-1.5 text-sm text-destructive transition-colors hover:bg-accent"
+          @click="handleLogout"
+          class="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm text-destructive transition-colors hover:bg-accent"
         >
-          Sign Out
+          <LogOut class="h-4 w-4" />
+          <span>Log out</span>
         </button>
       </div>
     </div>

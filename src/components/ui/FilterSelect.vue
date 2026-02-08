@@ -30,7 +30,7 @@ const emit = defineEmits<Emits>()
 const isOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 const triggerRef = ref<HTMLElement | null>(null)
-const dropdownPosition = ref({ top: 0, left: 0, width: 0, bottom: 'auto' as string | number })
+const dropdownPosition = ref<{ top: string | number; left: number; width: number; bottom: string | number }>({ top: 0, left: 0, width: 0, bottom: 'auto' })
 
 // Display text for the trigger button
 const displayText = computed(() => {

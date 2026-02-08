@@ -1,19 +1,15 @@
-import { ref } from 'vue'
-import { customers, type Customer } from '@/data/mock/customers'
+import { useCustomerStore } from '@/stores/customers'
 
+/**
+ * Thin wrapper around useCustomerStore() for backward compatibility.
+ * Components can continue using this composable while the store
+ * handles all state management internally.
+ */
 export function useCustomers() {
-  const allCustomers = ref<Customer[]>(customers)
-
-  const getCustomers = () => {
-    return allCustomers.value
-  }
-
-  const getCustomerById = (id: string) => {
-    return allCustomers.value.find((customer) => customer.id === id)
-  }
+  const store = useCustomerStore()
 
   return {
-    getCustomers,
-    getCustomerById,
+    getCustomers: () => store.allCustomers,
+    getCustomerById: (id: string) => store.getCustomerById(id),
   }
 }

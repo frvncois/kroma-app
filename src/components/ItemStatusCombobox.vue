@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import type { ItemStatus } from '@/data/mock/order-items'
+import type { ItemStatus } from '@/types'
+import { statusOptionsWithoutAll } from '@/lib/constants'
+import { statusColorMap } from '@/lib/variants'
 
 interface Props {
   modelValue: ItemStatus
@@ -14,29 +16,7 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-const statusOptions: { value: ItemStatus; label: string }[] = [
-  { value: 'new', label: 'New' },
-  { value: 'assigned', label: 'Assigned' },
-  { value: 'in_production', label: 'In Production' },
-  { value: 'on_hold', label: 'On Hold' },
-  { value: 'ready', label: 'Ready' },
-  { value: 'out_for_delivery', label: 'Out for Delivery' },
-  { value: 'delivered', label: 'Delivered' },
-  { value: 'picked_up', label: 'Picked Up' },
-  { value: 'canceled', label: 'Canceled' },
-]
-
-const statusColorMap: Record<ItemStatus, string> = {
-  new: 'bg-blue-500',
-  assigned: 'bg-blue-500',
-  in_production: 'bg-amber-500',
-  on_hold: 'bg-zinc-400',
-  ready: 'bg-cyan-500',
-  out_for_delivery: 'bg-amber-500',
-  delivered: 'bg-emerald-500',
-  picked_up: 'bg-emerald-500',
-  canceled: 'bg-red-500',
-}
+const statusOptions = statusOptionsWithoutAll
 
 const isOpen = ref(false)
 const containerRef = ref<HTMLElement>()

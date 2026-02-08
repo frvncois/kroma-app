@@ -1,28 +1,29 @@
 import type { ColumnDef } from '@tanstack/vue-table'
 import type { OrderWithDetails } from '@/composables/useOrders'
-import type { PaymentStatus } from '@/data/mock/orders'
-import type { ItemStatus } from '@/data/mock/order-items'
+import type { PaymentStatus, ItemStatus } from '@/types'
 import { h } from 'vue'
 import Badge from '@/components/ui/Badge.vue'
 import HoverCard from '@/components/ui/HoverCard.vue'
+import { formatSource, formatPayment } from '@/lib/formatters'
+import { getPaymentVariant, statusColorMap } from '@/lib/variants'
+import { sourceOptionsWithoutAll, paymentOptionsWithoutAll } from '@/lib/constants'
 
-// Source options
-const sourceOptions = [
-  { value: 'impression_quebec', label: 'Imp. Quebec' },
-  { value: 'promo_flash', label: 'Promo Flash' },
-  { value: 'propaganda', label: 'Propaganda' },
-  { value: 'sticker_pusher', label: 'Sticker Pusher' },
-  { value: 'other', label: 'Other' },
-]
+// Use options without 'all' for column filters
+const sourceOptions = sourceOptionsWithoutAll
+const paymentOptions = paymentOptionsWithoutAll
 
-// Payment options
-const paymentOptions = [
-  { value: 'paid', label: 'Paid' },
-  { value: 'unpaid', label: 'Unpaid' },
-  { value: 'partial', label: 'Partial' },
-]
+/**
+ * Column callbacks interface
+ */
+export interface ColumnCallbacks {
+  onOpenDetail: (orderId: string) => void
+}
 
-export const columns: ColumnDef<OrderWithDetails>[] = [
+/**
+ * Creates table columns with callbacks for actions
+ */
+export function createColumns(callbacks: ColumnCallbacks): ColumnDef<OrderWithDetails>[] {
+  return [
   {
     id: 'expand',
     header: () => '',
@@ -98,7 +99,8 @@ export const columns: ColumnDef<OrderWithDetails>[] = [
     accessorKey: 'files_count',
     header: 'Files',
     cell: ({ row }) => {
-      const order = row.original
+      // TODO: Compute files_count from order_files table
+      const filesCount = 0
       return h('div', { class: 'flex items-center gap-1.5' }, [
         h('svg', {
           class: 'h-4 w-4 text-muted-foreground',
@@ -113,7 +115,7 @@ export const columns: ColumnDef<OrderWithDetails>[] = [
             d: 'M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z',
           })
         ]),
-        h('span', { class: 'text-sm' }, order.files_count)
+        h('span', { class: 'text-sm' }, filesCount)
       ])
     },
   },
@@ -121,7 +123,8 @@ export const columns: ColumnDef<OrderWithDetails>[] = [
     accessorKey: 'comments_count',
     header: 'Notes',
     cell: ({ row }) => {
-      const order = row.original
+      // TODO: Compute comments_count from notes/comments
+      const commentsCount = 0
       return h('div', { class: 'flex items-center gap-1.5' }, [
         h('svg', {
           class: 'h-4 w-4 text-muted-foreground',
@@ -136,7 +139,7 @@ export const columns: ColumnDef<OrderWithDetails>[] = [
             d: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z',
           })
         ]),
-        h('span', { class: 'text-sm' }, order.comments_count)
+        h('span', { class: 'text-sm' }, commentsCount)
       ])
     },
   },
@@ -146,18 +149,8 @@ export const columns: ColumnDef<OrderWithDetails>[] = [
     cell: ({ row }) => {
       const items = row.original.items
 
-      // Color map for status dots
-      const colorMap: Record<ItemStatus, string> = {
-        new: 'bg-blue-500',
-        assigned: 'bg-blue-500',
-        in_production: 'bg-amber-500',
-        on_hold: 'bg-zinc-400',
-        ready: 'bg-cyan-500',
-        out_for_delivery: 'bg-amber-500',
-        delivered: 'bg-emerald-500',
-        picked_up: 'bg-emerald-500',
-        canceled: 'bg-red-500',
-      }
+      // Use color map from lib/variants
+      const colorMap = statusColorMap
 
       // Group items by status
       const statusGroups = items.reduce((acc, item) => {
@@ -212,13 +205,8 @@ export const columns: ColumnDef<OrderWithDetails>[] = [
     header: 'Payment',
     cell: ({ row }) => {
       const order = row.original
-      const paymentVariantMap: Record<PaymentStatus, 'success' | 'warning' | 'destructive'> = {
-        paid: 'success',
-        unpaid: 'destructive',
-        partial: 'warning',
-      }
-      const paymentLabel = paymentOptions.find(opt => opt.value === order.payment_status)?.label || order.payment_status
-      return h(Badge, { variant: paymentVariantMap[order.payment_status] }, () => paymentLabel)
+      const paymentLabel = formatPayment(order.payment_status)
+      return h(Badge, { variant: getPaymentVariant(order.payment_status) }, () => paymentLabel)
     },
   },
   {
@@ -229,13 +217,7 @@ export const columns: ColumnDef<OrderWithDetails>[] = [
       return h(
         'button',
         {
-          onClick: () => {
-            window.dispatchEvent(
-              new CustomEvent('open-order-detail', {
-                detail: { orderId: order.id },
-              })
-            )
-          },
+          onClick: () => callbacks.onOpenDetail(order.id),
           class: 'p-2 hover:bg-accent rounded-md transition-colors',
         },
         h('svg', {
@@ -252,4 +234,5 @@ export const columns: ColumnDef<OrderWithDetails>[] = [
     enableSorting: false,
     enableHiding: false,
   },
-]
+  ]
+}

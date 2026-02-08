@@ -1,38 +1,4 @@
-export type ItemStatus =
-  | 'new'
-  | 'assigned'
-  | 'in_production'
-  | 'on_hold'
-  | 'ready'
-  | 'out_for_delivery'
-  | 'delivered'
-  | 'picked_up'
-  | 'canceled'
-
-export interface StatusHistoryEntry {
-  status: ItemStatus
-  changed_at: string
-  changed_by: string
-  note?: string
-}
-
-export interface OrderItem {
-  id: string
-  order_id: string
-  product_name: string
-  description: string
-  quantity: number
-  specs: Record<string, any>
-  assigned_printshop: string | null
-  status: ItemStatus
-  status_history: StatusHistoryEntry[]
-  notes: string
-  due_date: string | null
-  production_start_date: string | null
-  production_ready_date: string | null
-  created_at: string
-  updated_at: string
-}
+import type { OrderItem } from '@/types'
 
 export const orderItems: OrderItem[] = [
   // Order 1 items
@@ -57,6 +23,7 @@ export const orderItems: OrderItem[] = [
     due_date: '2024-01-22',
     production_start_date: '2024-01-20T10:00:00Z',
     production_ready_date: '2024-01-22T14:00:00Z',
+    delivery_date: '2024-01-22T16:30:00Z',
     created_at: '2024-01-20T09:00:00Z',
     updated_at: '2024-01-22T16:30:00Z',
   },
@@ -80,6 +47,7 @@ export const orderItems: OrderItem[] = [
     due_date: '2024-01-22',
     production_start_date: '2024-01-20T10:30:00Z',
     production_ready_date: '2024-01-22T14:30:00Z',
+    delivery_date: '2024-01-22T16:30:00Z',
     created_at: '2024-01-20T09:00:00Z',
     updated_at: '2024-01-22T16:30:00Z',
   },
@@ -103,6 +71,7 @@ export const orderItems: OrderItem[] = [
     due_date: '2024-01-24',
     production_start_date: '2024-01-22T08:00:00Z',
     production_ready_date: null,
+    delivery_date: null,
     created_at: '2024-01-21T10:30:00Z',
     updated_at: '2024-01-22T14:00:00Z',
   },
@@ -125,6 +94,7 @@ export const orderItems: OrderItem[] = [
     due_date: '2024-01-25',
     production_start_date: '2024-01-21T13:00:00Z',
     production_ready_date: '2024-01-22T15:00:00Z',
+    delivery_date: null,
     created_at: '2024-01-21T10:30:00Z',
     updated_at: '2024-01-22T15:00:00Z',
   },
@@ -146,6 +116,7 @@ export const orderItems: OrderItem[] = [
     due_date: '2024-01-26',
     production_start_date: '2024-01-22T09:00:00Z',
     production_ready_date: '2024-01-23T11:00:00Z',
+    delivery_date: null,
     created_at: '2024-01-22T08:15:00Z',
     updated_at: '2024-01-23T11:00:00Z',
   },
@@ -167,6 +138,7 @@ export const orderItems: OrderItem[] = [
     due_date: '2024-01-20', // Overdue!
     production_start_date: '2024-01-22T11:30:00Z',
     production_ready_date: null,
+    delivery_date: null,
     created_at: '2024-01-22T11:00:00Z',
     updated_at: '2024-01-23T09:30:00Z',
   },
@@ -186,6 +158,7 @@ export const orderItems: OrderItem[] = [
     due_date: '2024-01-20', // Overdue!
     production_start_date: '2024-01-22T11:30:00Z',
     production_ready_date: null,
+    delivery_date: null,
     created_at: '2024-01-22T11:00:00Z',
     updated_at: '2024-01-23T09:30:00Z',
   },
@@ -207,6 +180,7 @@ export const orderItems: OrderItem[] = [
     due_date: '2024-01-28',
     production_start_date: null,
     production_ready_date: null,
+    delivery_date: null,
     created_at: '2024-01-23T09:00:00Z',
     updated_at: '2024-01-23T09:00:00Z',
   },
@@ -228,6 +202,7 @@ export const orderItems: OrderItem[] = [
     due_date: '2024-01-30',
     production_start_date: null,
     production_ready_date: null,
+    delivery_date: null,
     created_at: '2024-01-23T13:00:00Z',
     updated_at: '2024-01-23T13:00:00Z',
   },
@@ -247,6 +222,7 @@ export const orderItems: OrderItem[] = [
     due_date: '2024-01-30',
     production_start_date: null,
     production_ready_date: null,
+    delivery_date: null,
     created_at: '2024-01-23T13:00:00Z',
     updated_at: '2024-01-23T13:00:00Z',
   },
@@ -268,6 +244,7 @@ export const orderItems: OrderItem[] = [
     due_date: '2024-01-21',
     production_start_date: '2024-01-19T15:00:00Z',
     production_ready_date: '2024-01-20T17:00:00Z',
+    delivery_date: '2024-01-21T10:00:00Z',
     created_at: '2024-01-19T14:00:00Z',
     updated_at: '2024-01-21T10:00:00Z',
   },
@@ -289,6 +266,7 @@ export const orderItems: OrderItem[] = [
     due_date: '2024-01-24',
     production_start_date: '2024-01-22T08:00:00Z',
     production_ready_date: '2024-01-23T13:00:00Z',
+    delivery_date: null,
     created_at: '2024-01-21T15:00:00Z',
     updated_at: '2024-01-23T14:00:00Z',
   },
@@ -310,6 +288,7 @@ export const orderItems: OrderItem[] = [
     due_date: '2024-01-27',
     production_start_date: '2024-01-23T09:00:00Z',
     production_ready_date: null,
+    delivery_date: null,
     created_at: '2024-01-22T16:00:00Z',
     updated_at: '2024-01-23T10:00:00Z',
   },
@@ -329,6 +308,7 @@ export const orderItems: OrderItem[] = [
     due_date: '2024-01-27',
     production_start_date: null,
     production_ready_date: null,
+    delivery_date: null,
     created_at: '2024-01-22T16:00:00Z',
     updated_at: '2024-01-22T16:00:00Z',
   },
@@ -350,6 +330,7 @@ export const orderItems: OrderItem[] = [
     due_date: '2024-01-23',
     production_start_date: '2024-01-20T13:00:00Z',
     production_ready_date: null,
+    delivery_date: null,
     created_at: '2024-01-20T12:00:00Z',
     updated_at: '2024-01-21T09:00:00Z',
   },

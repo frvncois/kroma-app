@@ -1,19 +1,22 @@
 # KROMA — Master Specification
 
 > **Codename:** Kroma
-> **Purpose:** Centralized order management + logistics hub for a print shop operation with 2 physical locations.
-> **Stack:** Vue 3, Shadcn-vue, Supabase (Postgres, Auth, Storage, Realtime), Vercel
+> **Purpose:** Centralized order management + logistics hub for a print shop operation with 3 printshop locations.
+> **Stack:** Vue 3, Shadcn-vue, Pinia, Supabase (Postgres, Auth, Storage, Realtime), Vercel
 
 ---
 
 ## 1. Business Context
 
-The client operates **2 print shops** (Shop A and Shop B). Orders come in from multiple channels. Kroma centralizes all orders into one system where employees manage production and drivers handle deliveries.
+The client operates **3 print shops** (In House, Victor, Studio C — more may be added later). Orders come in from multiple channels. Kroma centralizes all orders into one system where employees manage production and drivers handle deliveries.
 
-### Order Sources
-- **Shopify** — 3 separate Shopify stores (Store A, Store B, Store C)
-- **Custom web forms** — on external websites
-- **Manual entry** — phone or email orders entered by a Manager in Kroma
+### Order Sources (Branded Store Names)
+- **Impression Québec** (`impression_quebec`) — Shopify store
+- **Promo Flash** (`promo_flash`) — Shopify store
+- **Propaganda** (`propaganda`) — Shopify store
+- **Sticker Pusher** (`sticker_pusher`) — Shopify store
+- **Studio C** (`studio_c`) — Shopify store
+- **Other** (`other`) — Custom web forms, manual entry, or other channels
 
 ---
 
@@ -23,12 +26,12 @@ There are 3 roles. Each user has exactly one role.
 
 ### 2.1 Manager
 - Can also act as a Printshop Manager
-- Scoped to: Shop A, Shop B, or Shop A+B
+- Scoped to all shops (full visibility)
 - **Can:** See all orders, create manual orders, assign printshop to items, manage payment status, see full order lifecycle, cancel items
 - **Cannot:** Optimize delivery routes
 
 ### 2.2 Printshop Manager
-- Scoped to: Shop A, Shop B, or Shop A+B
+- Scoped to one or more specific shops (e.g., Victor only, or In House + Studio C)
 - **Can:** See items assigned to their shop(s), manage production statuses, cancel items, mark items as picked up
 - **Cannot:** See all orders, assign printshops, create orders, manage payment, deliver
 
@@ -94,7 +97,12 @@ new → assigned → in_production → ready ──┬──→ out_for_delivery
 ### 3.3 Terminal States
 Every item ends in one of: **`delivered`**, **`picked_up`**, or **`canceled`**.
 
-### 3.4 Billing Webhook
+### 3.4 Auto-Set Dates on Status Change
+- When status → `in_production`: auto-set `production_start_date` to now
+- When status → `ready`: auto-set `production_ready_date` to now
+- When status → `delivered`: auto-set `delivery_date` to now (on the item)
+
+### 3.5 Billing Webhook
 - Fires **per item** when status changes to `ready`
 - Sends order + item + customer data to an external billing app (TBD)
 - Payload must include payment status so billing app knows if already paid
@@ -141,25 +149,24 @@ Each order has a delivery method:
 ## 6. Order Ingestion
 
 ### 6.1 Shopify Webhooks
-- 3 Shopify stores, each with its own webhook configuration
+- Multiple Shopify stores, each with its own webhook configuration
 - Shopify fires `orders/create` and `orders/updated` webhooks → Kroma Vercel API endpoint
 - Each store has its own webhook secret for verification
 - Kroma normalizes the Shopify payload into internal schema
 - Files attached to Shopify orders are downloaded and stored in Supabase Storage
-- Orders arrive with `source: shopify_a | shopify_b | shopify_c`
+- Orders arrive with `source` set to the branded store name (e.g., `impression_quebec`, `promo_flash`)
 - Orders arrive with `payment_status: paid`
 
 ### 6.2 Custom Web Forms
 - External websites POST to `/api/ingest/webform`
 - Kroma normalizes into internal schema
-- Orders arrive with `source: webform`
+- Orders arrive with `source: other`
 - Orders arrive with `payment_status: unpaid` (default)
 
 ### 6.3 Manual Entry
 - Manager fills out order form in Kroma UI
 - Full control over all fields
-- Orders arrive with `source: manual`
-- Manager sets payment status manually
+- Manager sets source and payment status manually
 
 ### 6.4 Customer Matching
 - On ingestion, match customer by email
@@ -168,7 +175,7 @@ Each order has a delivery method:
 
 ---
 
-## 7. Data Model (High-Level)
+## 7. Data Model
 
 ### 7.1 Tables
 
@@ -192,7 +199,7 @@ Each order has a delivery method:
 |-------------------|----------|-------------------------------------------------|
 | id                | uuid     | PK                                              |
 | customer_id       | uuid     | FK → customers                                  |
-| source            | enum     | `shopify_a`, `shopify_b`, `shopify_c`, `webform`, `manual` |
+| source            | enum     | `impression_quebec`, `promo_flash`, `propaganda`, `sticker_pusher`, `studio_c`, `other` |
 | external_id       | text     | Shopify order ID or external ref. Nullable       |
 | delivery_method   | enum     | `delivery`, `customer_pickup`                    |
 | payment_status    | enum     | `paid`, `unpaid`, `partial`                      |
@@ -203,20 +210,33 @@ Each order has a delivery method:
 | created_at        | timestamp|                                                  |
 | updated_at        | timestamp|                                                  |
 
+**Computed fields (not stored on orders):**
+- `files_count` — computed from `order_files` via items
+- `comments_count` — computed from notes/comments related to the order
+- `statusRollup` — derived from item statuses (see Section 14)
+
 #### `order_items`
-| Column            | Type     | Notes                                          |
-|-------------------|----------|-------------------------------------------------|
-| id                | uuid     | PK                                              |
-| order_id          | uuid     | FK → orders                                     |
-| product_name      | text     |                                                  |
-| description       | text     | Specs, size, material, etc.                      |
-| quantity           | integer  |                                                  |
-| specs             | jsonb    | Flexible field for print specs                   |
-| assigned_printshop| uuid     | FK → printshops. Nullable until assigned         |
-| status            | enum     | See Section 3.1                                  |
-| notes             | text     |                                                  |
-| created_at        | timestamp|                                                  |
-| updated_at        | timestamp|                                                  |
+| Column              | Type     | Notes                                          |
+|---------------------|----------|-------------------------------------------------|
+| id                  | uuid     | PK                                              |
+| order_id            | uuid     | FK → orders                                     |
+| product_name        | text     |                                                  |
+| description         | text     | Specs, size, material, etc.                      |
+| quantity            | integer  |                                                  |
+| specs               | jsonb    | Flexible field for print specs                   |
+| assigned_printshop  | uuid     | FK → printshops. Nullable until assigned         |
+| status              | enum     | See Section 3.1                                  |
+| notes               | text     |                                                  |
+| due_date            | date     | Nullable. Set at order creation, editable by Manager |
+| production_start_date | timestamp | Nullable. Auto-set when status → `in_production` |
+| production_ready_date | timestamp | Nullable. Auto-set when status → `ready`       |
+| delivery_date       | timestamp | Nullable. Auto-set when driver marks `delivered` |
+| created_at          | timestamp |                                                 |
+| updated_at          | timestamp |                                                 |
+
+**Key clarifications:**
+- `due_date` = internal production deadline, set when order is created, editable
+- `delivery_date` = actual timestamp when the driver marked this item as `delivered`. Lives on the item (not the order) because items in the same order can be delivered at different times.
 
 #### `order_files`
 | Column         | Type     | Notes                                          |
@@ -233,10 +253,12 @@ Each order has a delivery method:
 | Column      | Type     | Notes                              |
 |-------------|----------|------------------------------------|
 | id          | uuid     | PK                                 |
-| name        | text     | e.g. "Shop A", "Shop B"           |
+| name        | text     | e.g., "In House", "Victor", "Studio C" |
 | address     | text     |                                    |
 | lat         | decimal  | For route optimization             |
 | lng         | decimal  | For route optimization             |
+
+Current printshops: **In House**, **Victor**, **Studio C**. More may be added later.
 
 #### `users`
 | Column            | Type     | Notes                                          |
@@ -245,11 +267,32 @@ Each order has a delivery method:
 | name              | text     |                                                  |
 | email             | text     |                                                  |
 | role              | enum     | `manager`, `printshop_manager`, `driver`         |
-| assigned_shops    | uuid[]   | Array of printshop IDs. Nullable for drivers     |
+| assigned_shops    | uuid[]   | Array of printshop IDs. Empty for manager/driver |
 | created_at        | timestamp|                                                  |
 | updated_at        | timestamp|                                                  |
 
-#### `deliveries`
+**Phase 1 mock users:**
+
+| Email              | Name    | Role              | Assigned Shops | Password |
+|--------------------|---------|-------------------|----------------|----------|
+| manager@kroma.com  | Manager | manager           | [] (all access)| 1234     |
+| victor@kroma.com   | Victor  | printshop_manager | ['victor']     | 1234     |
+| driver@kroma.com   | Driver  | driver            | []             | 1234     |
+
+#### `status_history`
+| Column         | Type     | Notes                                          |
+|----------------|----------|-------------------------------------------------|
+| id             | uuid     | PK                                              |
+| order_item_id  | uuid     | FK → order_items                                 |
+| from_status    | enum     | Previous status. Nullable for first entry        |
+| to_status      | enum     | New status                                       |
+| changed_by     | uuid     | FK → users                                       |
+| notes          | text     | Optional reason                                  |
+| created_at     | timestamp|                                                  |
+
+**Phase 1 note:** Status history is embedded as an array on `order_items` in mock data. In Phase 2 (Supabase), it becomes a separate table.
+
+#### `deliveries` (Phase 4)
 | Column         | Type     | Notes                                          |
 |----------------|----------|-------------------------------------------------|
 | id             | uuid     | PK                                              |
@@ -260,7 +303,7 @@ Each order has a delivery method:
 | created_at     | timestamp|                                                  |
 | updated_at     | timestamp|                                                  |
 
-#### `delivery_stops`
+#### `delivery_stops` (Phase 4)
 | Column         | Type     | Notes                                          |
 |----------------|----------|-------------------------------------------------|
 | id             | uuid     | PK                                              |
@@ -276,16 +319,44 @@ Each order has a delivery method:
 | created_at     | timestamp|                                                  |
 | updated_at     | timestamp|                                                  |
 
-#### `status_history`
-| Column         | Type     | Notes                                          |
-|----------------|----------|-------------------------------------------------|
-| id             | uuid     | PK                                              |
-| order_item_id  | uuid     | FK → order_items                                 |
-| from_status    | enum     | Previous status. Nullable for first entry        |
-| to_status      | enum     | New status                                       |
-| changed_by     | uuid     | FK → users                                       |
-| notes          | text     | Optional reason                                  |
-| created_at     | timestamp|                                                  |
+### 7.2 Relationship Map
+
+```
+customers (1) ──────< (N) orders
+                           │
+                           ├── customer_id → customers.id
+                           │
+orders (1) ────────< (N) order_items
+                           │
+                           ├── order_id → orders.id
+                           ├── assigned_printshop → printshops.id (nullable)
+                           │
+order_items (1) ───< (N) order_files
+                           │
+                           ├── order_item_id → order_items.id
+                           │
+order_items (1) ───< (N) status_history
+                           │
+                           ├── order_item_id → order_items.id
+                           ├── changed_by → users.id
+                           │
+printshops (1) ────< (N) order_items        (via assigned_printshop)
+
+users ──── role + assigned_shops[]
+  │
+  └──< deliveries ──< delivery_stops        (Phase 4)
+```
+
+### 7.3 Activity Feed
+
+The activity feed is **not a separate table**. It is computed/derived from all system events:
+- Status changes (from `status_history`)
+- New orders created
+- New notes added to orders/items
+- Printshop assignments
+- Deliveries and pickups
+
+In Phase 1, a mock activities array is used for UI development. In Phase 2+, the activity feed will be a computed view across `status_history`, orders, and notes.
 
 ---
 
@@ -317,10 +388,10 @@ Each order has a delivery method:
 ## 9. Route Optimization Logic
 
 - Driver selects which orders to include in a delivery run
-- Kroma computes stops: **pickups** at Shop A and/or Shop B + **dropoffs** at customer addresses
+- Kroma computes stops: **pickups** at printshop locations + **dropoffs** at customer addresses
 - Constraint: pickups must happen before their related dropoffs
 - Uses **Google Directions API** with `optimizeWaypoints` (supports up to 25 waypoints)
-- Route accounts for both printshop locations as potential starting/intermediate points
+- Route accounts for all printshop locations as potential starting/intermediate points
 - Driver follows the optimized sequence and marks stops as completed
 
 ---
@@ -353,7 +424,7 @@ Each order has a delivery method:
 - Shopify files are downloaded during ingestion and stored in Supabase
 - Manual orders: Manager uploads files directly
 - Web form orders: Files are received and stored during ingestion
-- Files are linked to specific order items (not just orders)
+- Files are linked to specific **order items** (not just orders) via `order_files` table
 - File types: `artwork`, `proof`, `reference`, `other`
 
 ---
@@ -370,13 +441,13 @@ Each order has a delivery method:
 
 ## 13. Build Phases
 
-### Phase 1 — UI Foundation (Mock Data)
-- Vue 3 + Shadcn-vue project scaffolding
+### Phase 1 — UI Foundation (Mock Data) ← CURRENT
+- Vue 3 + Shadcn-vue + Pinia project scaffolding
 - Mock data layer (`/data/mock`) with JSON/JS objects for all entities
-- Data service layer (`useOrders()`, `useCustomers()`, etc.) abstracting data access
-- Fake auth (role switcher to test Manager / Printshop Manager / Driver views)
+- Data service layer (Pinia stores + composables) abstracting data access
+- Mock auth with login screen (3 test accounts, no Supabase)
 - **Manager views:**
-  - Order list (filterable by status, source, payment)
+  - Order list (table + kanban, filterable by status, source, payment)
   - Order detail (customer, items, files, payment, status)
   - Manual order entry form
   - Printshop assignment flow
@@ -392,14 +463,14 @@ Each order has a delivery method:
 ### Phase 2 — Supabase Integration
 - Supabase project setup (database, auth, storage)
 - Migrate mock data schema to real Postgres tables
-- Replace data service internals to use Supabase client
+- Replace data service internals to use Supabase client (stores swap from mock to Supabase, composable/component APIs unchanged)
 - Real auth flow (login, signup, password reset)
 - RLS policies for role-based access
 - File upload to Supabase Storage
 - Supabase Realtime subscriptions for live updates
 
 ### Phase 3 — Ingestion
-- Shopify webhook receiver (all 3 stores)
+- Shopify webhook receiver (all stores)
 - Shopify payload normalization
 - Shopify file download + storage
 - Web form API endpoint
@@ -447,6 +518,81 @@ Since tracking is at the item level, the order's "effective status" is derived:
 - Order is `delivered` / `picked_up` if ALL non-canceled items are in a terminal state
 - Order is `canceled` if ALL items are `canceled`
 
+### Project Structure (Post-Refactor Target)
+
+```
+src/
+├── types/                      ← Standalone type definitions (survive Supabase migration)
+│   ├── index.ts                   Barrel re-export
+│   ├── customer.ts
+│   ├── order.ts
+│   ├── order-item.ts
+│   ├── order-file.ts
+│   ├── printshop.ts
+│   ├── user.ts
+│   ├── activity.ts
+│   └── note.ts
+├── lib/                        ← Shared utilities
+│   ├── formatters.ts              Domain formatters (dates, statuses, currency)
+│   ├── variants.ts                Badge/color variant mappings
+│   ├── constants.ts               Filter options, kanban columns, enums
+│   └── utils.ts                   General helpers (cn, etc.)
+├── stores/                     ← Pinia stores (single source of truth)
+│   ├── auth.ts
+│   ├── orders.ts
+│   ├── customers.ts
+│   └── activities.ts
+├── composables/                ← Thin wrappers around stores
+│   ├── useOrders.ts
+│   ├── useOrderItems.ts
+│   ├── useCustomers.ts
+│   └── useToast.ts
+├── data/mock/                  ← Mock data (Phase 1 only, data arrays, no types)
+│   ├── orders.ts
+│   ├── order-items.ts
+│   ├── order-files.ts
+│   ├── customers.ts
+│   ├── printshops.ts
+│   ├── users.ts
+│   └── activities.ts
+├── components/
+│   ├── ui/                        Primitives (Button, Badge, Card, Sheet, etc.)
+│   ├── AppLayout.vue              Top nav (role-aware)
+│   ├── DataTable.vue              Generic TanStack table
+│   ├── StatsCards.vue             Config-driven stat cards
+│   ├── OrderFilters.vue           Reusable filter bar
+│   ├── KanbanBoard.vue            Reusable kanban with drag/drop
+│   ├── KanbanCard.vue             Single kanban card
+│   ├── OrderExpandedRow.vue       Expanded row for table view
+│   ├── StatsSheet.vue             Drill-down sheet for stats
+│   ├── AssignmentDialog.vue       Confirmation dialog
+│   ├── ItemControls.vue           Reusable item editing (status, printshop, dates)
+│   ├── NotesSection.vue           Reusable notes CRUD
+│   ├── OrderDetailSheet.vue       Order detail slide-out
+│   ├── NewOrderSheet.vue          Manual order creation
+│   ├── DriverTaskSheet.vue        Ad-hoc driver tasks
+│   ├── ActivityFeed.vue           Right sidebar feed
+│   └── ItemStatusCombobox.vue     Status dropdown
+├── views/
+│   ├── LoginView.vue              Login screen
+│   ├── manager/
+│   │   ├── ManagerOrders.vue      Orchestration only (~300 lines)
+│   │   ├── ManagerCustomers.vue
+│   │   └── order-columns.ts       TanStack column defs (callback pattern)
+│   ├── printshop/
+│   │   └── PrintshopQueue.vue     Kanban production queue
+│   └── driver/
+│       └── DriverDeliveries.vue   Delivery queue + route
+└── router/index.ts                Role-aware routing with auth guards
+```
+
+### Data Service Layer Pattern
+- **Pinia stores** are the single source of truth for all state
+- **Composables** (`useOrders()`, `useCustomers()`, etc.) are thin wrappers providing a stable API
+- Phase 1: Stores load from `/data/mock`
+- Phase 2: Stores swap to Supabase client — composable and component APIs unchanged
+- Components never import from `/data/mock` directly
+
 ---
 
 ## 15. Open Items / TBD
@@ -458,3 +604,4 @@ Since tracking is at the item level, the order's "effective status" is derived:
 - [ ] Customer-facing portal — future phase
 - [ ] Shopify status sync-back (update Shopify when Kroma status changes) — future phase
 - [ ] Proof approval workflow (customer approves proof before production) — future phase
+- [ ] Comments/notes table structure (currently embedded, needs formal schema for Phase 2)

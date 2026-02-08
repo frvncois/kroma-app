@@ -1,10 +1,4 @@
-export interface Printshop {
-  id: string
-  name: string
-  address: string
-  lat: number
-  lng: number
-}
+import type { Printshop } from '@/types'
 
 export const printshops: Printshop[] = [
   {

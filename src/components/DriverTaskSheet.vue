@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { printshops } from '@/data/mock/printshops'
+import { usePrintshops } from '@/composables/usePrintshops'
 import Sheet from '@/components/ui/Sheet.vue'
 import Card from '@/components/ui/Card.vue'
 import CardContent from '@/components/ui/CardContent.vue'
@@ -24,6 +24,8 @@ interface Emits {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+
+const { getPrintshops } = usePrintshops()
 
 // Task details
 type TaskType = 'pickup' | 'dropoff' | 'other'
@@ -54,7 +56,7 @@ const taskPriorityOptions = [
 
 // Location options
 const locationOptions = computed(() => [
-  ...printshops.map((shop) => ({
+  ...getPrintshops().map((shop) => ({
     value: shop.id,
     label: shop.name,
   })),
@@ -76,7 +78,7 @@ const handleTaskPriorityChange = (priority: string | string[]) => {
 
 const handleLocationChange = (location: string | string[]) => {
   const value = Array.isArray(location) ? location[0] : location
-  taskLocation.value = value
+  taskLocation.value = value || ''
 }
 
 // Notes management
@@ -118,9 +120,9 @@ const startEditNote = (note: TaskNote) => {
 const saveEditNote = () => {
   if (!editingNoteId.value || !editingNoteContent.value.trim()) return
 
-  const noteIndex = notes.value.findIndex(n => n.id === editingNoteId.value)
-  if (noteIndex !== -1) {
-    notes.value[noteIndex].content = editingNoteContent.value
+  const note = notes.value.find(n => n.id === editingNoteId.value)
+  if (note) {
+    note.content = editingNoteContent.value
   }
 
   editingNoteId.value = null

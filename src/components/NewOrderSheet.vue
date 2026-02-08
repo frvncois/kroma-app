@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useCustomers } from '@/composables/useCustomers'
-import { printshops } from '@/data/mock/printshops'
-import type { Customer } from '@/data/mock/customers'
-import type { PaymentStatus, PaymentMethod, DeliveryMethod } from '@/data/mock/orders'
+import { usePrintshops } from '@/composables/usePrintshops'
+import type { Customer, PaymentStatus, PaymentMethod, DeliveryMethod, OrderNote, NoteDepartment } from '@/types'
 import Sheet from '@/components/ui/Sheet.vue'
 import Card from '@/components/ui/Card.vue'
 import CardContent from '@/components/ui/CardContent.vue'
@@ -14,7 +13,9 @@ import Textarea from '@/components/ui/Textarea.vue'
 import Label from '@/components/ui/Label.vue'
 import Badge from '@/components/ui/Badge.vue'
 import DateInput from '@/components/ui/DateInput.vue'
-import { User, Package, Paperclip, ChevronDown, ChevronRight, X, MessageSquare, Edit2, Trash2 } from 'lucide-vue-next'
+import ItemControls from '@/components/ItemControls.vue'
+import NotesSection from '@/components/NotesSection.vue'
+import { User, Package, Paperclip, ChevronDown, ChevronRight, X } from 'lucide-vue-next'
 
 interface Props {
   isOpen: boolean
@@ -29,6 +30,7 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const { getCustomers } = useCustomers()
+const { getPrintshops } = usePrintshops()
 
 // Customer section
 const showNewCustomerForm = ref(false)
@@ -145,17 +147,16 @@ const toggleItemExpanded = (itemId: string) => {
 // Printshop options
 const printshopOptions = computed(() => [
   { value: '', label: 'Unassigned' },
-  ...printshops.map((shop) => ({
+  ...getPrintshops().map((shop) => ({
     value: shop.id,
     label: shop.name,
   })),
 ])
 
-const handlePrintshopChange = (itemId: string, printshopId: string | string[]) => {
-  const value = Array.isArray(printshopId) ? (printshopId[0] || '') : printshopId
+const handlePrintshopChange = (itemId: string, printshopId: string | null) => {
   const item = items.value.find(i => i.id === itemId)
   if (item) {
-    item.assigned_printshop = value === '' ? null : value
+    item.assigned_printshop = printshopId
   }
 }
 
@@ -182,25 +183,7 @@ const removeItem = (itemId: string) => {
 }
 
 // Notes management
-type NoteDepartment = 'printshop' | 'delivery' | 'billing' | 'everyone'
-
-interface OrderNote {
-  id: string
-  content: string
-  departments: NoteDepartment[]
-  created_at: string
-  created_by: string
-  item_reference: string | null
-}
-
 const notes = ref<OrderNote[]>([])
-const newNoteContent = ref('')
-const selectedDepartment = ref<NoteDepartment>('everyone')
-const selectedItemReference = ref<string>('order')
-
-// Edit note state
-const editingNoteId = ref<string | null>(null)
-const editingNoteContent = ref('')
 
 // Department options for notes
 const departmentOptions = [
@@ -219,76 +202,32 @@ const itemReferenceOptions = computed(() => [
   }))
 ])
 
-const addNote = () => {
-  if (!newNoteContent.value.trim() || !selectedDepartment.value) return
-
+// Note handlers
+const handleAddNote = (content: string, departments: NoteDepartment[], itemReference: string | null) => {
   const note: OrderNote = {
     id: `note-${Date.now()}`,
-    content: newNoteContent.value,
-    departments: [selectedDepartment.value],
+    content,
+    departments,
     created_at: new Date().toISOString(),
     created_by: 'Current User',
-    item_reference: selectedItemReference.value === 'order' ? null : selectedItemReference.value
+    item_reference: itemReference
   }
 
   notes.value.unshift(note)
-  newNoteContent.value = ''
-  selectedDepartment.value = 'everyone'
-  selectedItemReference.value = 'order'
-
   console.log('Added note:', note)
 }
 
-const startEditNote = (note: OrderNote) => {
-  editingNoteId.value = note.id
-  editingNoteContent.value = note.content
-}
-
-const saveEditNote = () => {
-  if (!editingNoteId.value || !editingNoteContent.value.trim()) return
-
-  const noteIndex = notes.value.findIndex(n => n.id === editingNoteId.value)
-  if (noteIndex !== -1) {
-    notes.value[noteIndex].content = editingNoteContent.value
+const handleEditNote = (noteId: string, newContent: string) => {
+  const note = notes.value.find(n => n.id === noteId)
+  if (note) {
+    note.content = newContent
   }
-
-  editingNoteId.value = null
-  editingNoteContent.value = ''
 }
 
-const cancelEditNote = () => {
-  editingNoteId.value = null
-  editingNoteContent.value = ''
-}
-
-const deleteNote = (noteId: string) => {
+const handleDeleteNote = (noteId: string) => {
   const index = notes.value.findIndex(n => n.id === noteId)
   if (index !== -1) {
     notes.value.splice(index, 1)
-  }
-}
-
-const formatNoteDate = (dateString: string): string => {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-const getDepartmentLabel = (dept: NoteDepartment): string => {
-  switch (dept) {
-    case 'printshop':
-      return 'Printshop Manager'
-    case 'delivery':
-      return 'Delivery'
-    case 'billing':
-      return 'Billing Department'
-    case 'everyone':
-      return 'Everyone'
   }
 }
 
@@ -403,11 +342,6 @@ const resetForm = () => {
   validationErrors.value = []
   expandedItems.value.clear()
   notes.value = []
-  newNoteContent.value = ''
-  selectedDepartment.value = 'everyone'
-  selectedItemReference.value = 'order'
-  editingNoteId.value = null
-  editingNoteContent.value = ''
 }
 
 const cancel = () => {
@@ -707,19 +641,24 @@ const cancel = () => {
                     />
                   </div>
 
-                  <div>
-                    <Label class="text-xs text-muted-foreground mb-1 block">Assigned Printshop</Label>
-                    <FilterSelect
-                      :model-value="item.assigned_printshop || ''"
-                      @update:model-value="(val) => handlePrintshopChange(item.id, val)"
-                      :options="printshopOptions"
-                    />
-                  </div>
-
-                  <div>
-                    <Label class="text-xs text-muted-foreground mb-1 block">Due Date</Label>
-                    <DateInput v-model="item.due_date" />
-                  </div>
+                  <ItemControls
+                    :item="{
+                      id: item.id,
+                      status: 'new',
+                      assigned_printshop: item.assigned_printshop,
+                      due_date: item.due_date,
+                      delivery_date: null,
+                      production_start_date: null,
+                      production_ready_date: null,
+                    }"
+                    :show-printshop="true"
+                    :show-status="false"
+                    :show-due-date="true"
+                    :show-timeline="false"
+                    layout="inline"
+                    @update:printshop="(itemId, shopId) => handlePrintshopChange(itemId, shopId)"
+                    @update:due-date="(itemId, date) => { const i = items.find(x => x.id === itemId); if (i) i.due_date = date }"
+                  />
                 </div>
 
                 <div>
@@ -752,124 +691,14 @@ const cancel = () => {
       </div>
 
       <!-- Notes Section -->
-      <div>
-        <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-          <MessageSquare class="h-5 w-5" />
-          Notes ({{ notes.length }})
-        </h3>
-
-        <Card>
-          <CardContent class="p-4">
-            <!-- Existing Notes -->
-            <div v-if="notes.length === 0" class="text-sm text-muted-foreground text-center py-8">
-              No notes yet
-            </div>
-            <div v-else class="space-y-3 mb-4">
-              <div
-                v-for="note in notes"
-                :key="note.id"
-                class="border-b pb-3 last:border-b-0 last:pb-0"
-              >
-                <div class="flex items-start justify-between mb-2">
-                  <div class="flex-1">
-                    <div class="flex items-center gap-2">
-                      <div class="text-sm font-semibold">{{ note.created_by }}</div>
-                      <Badge v-if="note.item_reference" variant="outline" class="text-xs">
-                        {{ note.item_reference }}
-                      </Badge>
-                    </div>
-                    <div class="text-xs text-muted-foreground">{{ formatNoteDate(note.created_at) }}</div>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <div class="flex flex-wrap gap-1">
-                      <Badge
-                        v-for="dept in note.departments"
-                        :key="dept"
-                        variant="secondary"
-                        class="text-xs"
-                      >
-                        {{ getDepartmentLabel(dept) }}
-                      </Badge>
-                    </div>
-                    <div class="flex gap-1">
-                      <button
-                        @click="startEditNote(note)"
-                        class="rounded-md p-1 transition-colors hover:bg-accent"
-                        title="Edit note"
-                      >
-                        <Edit2 class="h-3 w-3 text-muted-foreground" />
-                      </button>
-                      <button
-                        @click="deleteNote(note.id)"
-                        class="rounded-md p-1 transition-colors hover:bg-destructive/10"
-                        title="Delete note"
-                      >
-                        <Trash2 class="h-3 w-3 text-destructive" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Edit mode -->
-                <div v-if="editingNoteId === note.id" class="space-y-2">
-                  <Textarea
-                    v-model="editingNoteContent"
-                    :rows="3"
-                  />
-                  <div class="flex gap-2 justify-end">
-                    <Button
-                      @click="cancelEditNote"
-                      variant="outline"
-                      size="sm"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      @click="saveEditNote"
-                      size="sm"
-                      :disabled="!editingNoteContent.trim()"
-                    >
-                      Save
-                    </Button>
-                  </div>
-                </div>
-
-                <!-- View mode -->
-                <div v-else class="text-sm whitespace-pre-wrap">{{ note.content }}</div>
-              </div>
-            </div>
-
-            <!-- Add Note Form -->
-            <div class="border-t pt-4 space-y-3">
-              <Textarea
-                v-model="newNoteContent"
-                :rows="3"
-                placeholder="Write a note..."
-              />
-              <div class="flex items-center gap-2">
-                <FilterSelect
-                  v-model="selectedItemReference"
-                  :options="itemReferenceOptions"
-                  class="w-48"
-                />
-                <FilterSelect
-                  v-model="selectedDepartment"
-                  :options="departmentOptions"
-                  class="w-40"
-                />
-                <Button
-                  @click="addNote"
-                  :disabled="!newNoteContent.trim()"
-                  size="sm"
-                  class="ml-auto"
-                >
-                  Add Note
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <NotesSection
+        :notes="notes"
+        :item-options="itemReferenceOptions"
+        :department-options="departmentOptions"
+        @add-note="handleAddNote"
+        @edit-note="handleEditNote"
+        @delete-note="handleDeleteNote"
+      />
 
       <!-- Footer Actions -->
       <div class="flex gap-3 sticky bottom-0 bg-background pt-4 border-t">
