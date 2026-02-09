@@ -110,6 +110,8 @@ export const useOrderStore = defineStore('orders', () => {
       type,
       timestamp: new Date().toISOString(),
       user: authStore.currentUser?.name || 'System',
+      seen: false,
+      important: false,
       item: item ? {
         id: item.id,
         name: `${item.product_name}${item.quantity > 1 ? ` - ${item.quantity}x` : ''}`,

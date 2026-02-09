@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { formatDistanceToNow } from 'date-fns'
 import Badge from '@/components/ui/Badge.vue'
 import Input from '@/components/ui/Input.vue'
+import Button from '@/components/ui/Button.vue'
 import {
   Package,
   MessageSquare,
@@ -13,7 +14,10 @@ import {
   FileText,
   User,
   Settings,
-  Search
+  Search,
+  Eye,
+  EyeOff,
+  Star
 } from 'lucide-vue-next'
 
 interface Activity {
@@ -21,6 +25,8 @@ interface Activity {
   type: 'status_change' | 'note_added' | 'delivery' | 'pickup' | 'assignment' | 'order_created'
   timestamp: string
   user: string
+  seen: boolean
+  important: boolean
   item?: {
     id: string
     name: string
@@ -45,6 +51,8 @@ interface Props {
 
 interface Emits {
   (e: 'activity-click', orderId: string): void
+  (e: 'toggle-seen', activityId: string): void
+  (e: 'toggle-important', activityId: string): void
 }
 
 const props = defineProps<Props>()
@@ -128,8 +136,20 @@ const getCurrentStatus = (activity: Activity): string | null => {
   }
 }
 
-// Search functionality
+// Search and filter functionality
 const searchQuery = ref('')
+const activeFilter = ref<'all' | 'new' | 'important'>('all')
+
+// Toggle handlers
+const handleToggleSeen = (activityId: string, event: Event) => {
+  event.stopPropagation()
+  emit('toggle-seen', activityId)
+}
+
+const handleToggleImportant = (activityId: string, event: Event) => {
+  event.stopPropagation()
+  emit('toggle-important', activityId)
+}
 
 const filteredActivities = computed(() => {
   let filtered = props.activities
@@ -161,8 +181,24 @@ const filteredActivities = computed(() => {
     })
   }
 
-  // Sort by timestamp (newest first)
+  // Apply status filter
+  if (activeFilter.value === 'new') {
+    filtered = filtered.filter(activity => !activity.seen)
+  } else if (activeFilter.value === 'important') {
+    filtered = filtered.filter(activity => activity.important)
+  }
+
+  // Sort: important first, then unseen, then seen, then by timestamp
   return [...filtered].sort((a, b) => {
+    // Important items always at the top
+    if (a.important && !b.important) return -1
+    if (!a.important && b.important) return 1
+
+    // Then unseen before seen
+    if (!a.seen && b.seen) return -1
+    if (a.seen && !b.seen) return 1
+
+    // Finally by timestamp (newest first)
     return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   })
 })
@@ -182,6 +218,37 @@ const filteredActivities = computed(() => {
           class="pl-9 h-9 text-sm"
         />
       </div>
+
+      <!-- Filter Buttons -->
+      <div class="flex gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          @click="activeFilter = 'all'"
+          :class="activeFilter === 'all' ? 'bg-accent' : ''"
+          class="h-7 text-xs flex-1"
+        >
+          All
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          @click="activeFilter = 'new'"
+          :class="activeFilter === 'new' ? 'bg-accent' : ''"
+          class="h-7 text-xs flex-1"
+        >
+          New
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          @click="activeFilter = 'important'"
+          :class="activeFilter === 'important' ? 'bg-accent text-green-600' : ''"
+          class="h-7 text-xs flex-1"
+        >
+          Important
+        </Button>
+      </div>
     </div>
 
     <!-- Activity List -->
@@ -190,7 +257,11 @@ const filteredActivities = computed(() => {
         v-for="activity in filteredActivities"
         :key="activity.id"
         @click="activity.order && emit('activity-click', activity.order.id)"
-        class="relative rounded-lg border bg-card p-3 hover:bg-accent/50 transition-colors cursor-pointer"
+        :class="[
+          'relative rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer',
+          activity.seen ? 'p-2' : 'p-3',
+          activity.important ? 'border-green-200 dark:border-green-900 shadow-green-100 dark:shadow-green-950 shadow-sm' : ''
+        ]"
       >
         <!-- Row 1: Icon, Title -->
         <div class="flex gap-3 items-center mb-2">
@@ -203,8 +274,8 @@ const filteredActivities = computed(() => {
           </div>
         </div>
 
-        <!-- Row 2: Content -->
-        <div class="space-y-1 p-2">
+        <!-- Row 2: Content (collapsed if seen) -->
+        <div v-if="!activity.seen" class="space-y-1 p-2">
             <!-- Item/Order Info -->
             <div v-if="activity.item" class="text-xs text-muted-foreground">
               <span class="font-medium">{{ activity.item.name }}</span>
@@ -247,6 +318,38 @@ const filteredActivities = computed(() => {
                 <span class="text-xs text-muted-foreground">{{ formatTimeAgo(activity.timestamp) }}</span>
               </div>
             </div>
+        </div>
+
+        <!-- Collapsed view for seen activities -->
+        <div v-else class="px-2 py-1">
+          <div class="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{{ formatTimeAgo(activity.timestamp) }}</span>
+            <span v-if="activity.order">
+              #{{ activity.order.externalId || activity.order.id.slice(0, 8) }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-2 mt-2 pt-2 border-t">
+          <Button
+            variant="outline"
+            size="sm"
+            @click="handleToggleSeen(activity.id, $event)"
+            class="flex-1 h-7 text-xs"
+          >
+            <component :is="activity.seen ? EyeOff : Eye" class="h-3 w-3 mr-1" />
+            Seen
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            @click="handleToggleImportant(activity.id, $event)"
+            :class="activity.important ? 'flex-1 h-7 text-xs text-green-600 hover:text-green-700 border-green-600' : 'flex-1 h-7 text-xs'"
+          >
+            <Star :class="activity.important ? 'h-3 w-3 mr-1 fill-green-600' : 'h-3 w-3 mr-1'" />
+            Important
+          </Button>
         </div>
       </div>
 

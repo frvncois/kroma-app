@@ -21,8 +21,8 @@ interface FilterConfig {
 }
 
 interface Props {
-  viewMode: string
-  viewOptions: { value: string; label: string; icon: string }[]
+  viewMode?: string
+  viewOptions?: { value: string; label: string; icon: string }[]
 
   // Filter configurations (which filters to show)
   tableFilters?: FilterConfig[]
@@ -149,6 +149,7 @@ const getFilterValue = (key: string): string | string[] => {
 
     <!-- View Toggle -->
     <ViewToggle
+      v-if="viewMode && viewOptions && viewOptions.length > 0"
       :model-value="viewMode"
       @update:model-value="emit('update:viewMode', $event)"
       :options="viewOptions"

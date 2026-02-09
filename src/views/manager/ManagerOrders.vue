@@ -101,6 +101,14 @@ const handleActivityClick = (orderId: string) => {
   openOrderDetail(orderId, 'left')
 }
 
+const handleToggleSeen = (activityId: string) => {
+  activityStore.toggleSeen(activityId)
+}
+
+const handleToggleImportant = (activityId: string) => {
+  activityStore.toggleImportant(activityId)
+}
+
 const openNewOrderSheet = () => {
   isNewOrderSheetOpen.value = true
 }
@@ -390,9 +398,9 @@ const kanbanFilterConfigs = [
 </script>
 
 <template>
-  <div class="h-full mr-80 overflow-hidden w-full">
+  <div class="h-full mr-80 w-full">
     <!-- Main Content -->
-    <div class="flex h-full flex-col space-y-10 p-10 overflow-hidden">
+    <div class="flex h-full flex-col space-y-10 p-10">
       <!-- Row 1: Header -->
       <div class="flex items-center justify-between flex-shrink-0">
         <h1 class="text-3xl font-medium">General Manager</h1>
@@ -457,7 +465,12 @@ const kanbanFilterConfigs = [
 
     <!-- Right Sidebar: Activity Feed -->
     <div class="fixed right-0 top-16 bottom-0 w-80 border-l bg-background overflow-y-auto">
-      <ActivityFeed :activities="activities" @activity-click="handleActivityClick" />
+      <ActivityFeed
+        :activities="activities"
+        @activity-click="handleActivityClick"
+        @toggle-seen="handleToggleSeen"
+        @toggle-important="handleToggleImportant"
+      />
     </div>
 
     <!-- Order Detail Sheet -->

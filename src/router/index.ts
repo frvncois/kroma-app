@@ -4,7 +4,9 @@ import AppLayout from '@/components/AppLayout.vue'
 import LoginView from '@/views/LoginView.vue'
 import ManagerOrders from '@/views/manager/ManagerOrders.vue'
 import ManagerCustomers from '@/views/manager/ManagerCustomers.vue'
+import ManagerArchives from '@/views/manager/ManagerArchives.vue'
 import PrintshopQueue from '@/views/printshop/PrintshopQueue.vue'
+import PrintshopArchives from '@/views/printshop/PrintshopArchives.vue'
 import DriverDeliveries from '@/views/driver/DriverDeliveries.vue'
 
 const router = createRouter({
@@ -38,6 +40,11 @@ const router = createRouter({
           name: 'manager-customers',
           component: ManagerCustomers,
         },
+        {
+          path: 'archives',
+          name: 'manager-archives',
+          component: ManagerArchives,
+        },
       ],
     },
     {
@@ -49,6 +56,11 @@ const router = createRouter({
           path: 'queue',
           name: 'printshop-queue',
           component: PrintshopQueue,
+        },
+        {
+          path: 'archives',
+          name: 'printshop-archives',
+          component: PrintshopArchives,
         },
       ],
     },

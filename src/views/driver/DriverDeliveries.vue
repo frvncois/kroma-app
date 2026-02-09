@@ -9,14 +9,13 @@ import { useToast } from '@/composables/useToast'
 import type { OrderItem, ItemStatus, Printshop, Customer } from '@/types'
 import type { OrderWithDetails } from '@/composables/useOrders'
 import type { OrderItemWithDetails } from '@/composables/useOrderItems'
-import { driverKanbanColumns, driverStatusOptions } from '@/lib/constants'
+import { driverStatusOptions } from '@/lib/constants'
 import { formatDistanceToNow } from 'date-fns'
 import { formatStatus, formatSource } from '@/lib/formatters'
 import { getStatusVariant } from '@/lib/variants'
 import DriverItemList from '@/components/DriverItemList.vue'
 import ActivityFeed from '@/components/ActivityFeed.vue'
 import OrderFilters from '@/components/OrderFilters.vue'
-import KanbanBoard from '@/components/KanbanBoard.vue'
 import OrderDetailSheet from '@/components/OrderDetailSheet.vue'
 import StatsCards from '@/components/StatsCards.vue'
 import Button from '@/components/ui/Button.vue'
@@ -70,49 +69,18 @@ const recentlyDelivered = computed(() => {
   })
 })
 
-// View mode
-const viewMode = ref<'table' | 'kanban'>('table')
-const viewOptions = [
-  { value: 'table', label: 'List', icon: 'table' },
-  { value: 'kanban', label: 'Board', icon: 'kanban' }
-]
-
 // Filters
 const statusFilter = ref<string[]>(['all'])
 const orderBy = ref('newest')
 const searchQuery = ref('')
-const kanbanColumnsFilter = ref<string[]>(['all'])
 
-const tableFilterConfigs = [
+const filterConfigs = [
   { key: 'status', label: 'Status', options: driverStatusOptions },
   { key: 'orderBy', label: 'Order By', options: [
     { value: 'newest', label: 'Newest' },
     { value: 'oldest', label: 'Oldest' },
   ]},
 ]
-
-const kanbanFilterConfigs = [
-  { key: 'kanbanColumns', label: 'Columns', options: driverKanbanColumns.map(col => ({ value: col.id, label: col.title })) },
-]
-
-// Visible kanban columns
-const visibleKanbanColumns = computed(() => {
-  if (kanbanColumnsFilter.value.includes('all')) {
-    return driverKanbanColumns
-  }
-  return driverKanbanColumns.filter(col => kanbanColumnsFilter.value.includes(col.id))
-})
-
-// Filtered items for kanban
-const filteredItems = computed(() => {
-  return deliverableOrders.value.flatMap(order =>
-    order.items.map(item => ({
-      ...item,
-      order,
-      customer: order.customer
-    }))
-  )
-})
 
 // Route state
 const selectedOrderIds = ref<Set<string>>(new Set())
@@ -375,6 +343,8 @@ const submitIssue = () => {
       type: 'note_added',
       timestamp: new Date().toISOString(),
       user: authStore.currentUser?.name || 'Driver',
+      seen: false,
+      important: false,
       item: {
         id: firstItem.id,
         name: firstItem.product_name,
@@ -495,6 +465,14 @@ const handleActivityClick = (orderId: string) => {
   openOrderDetail(orderId)
 }
 
+const handleToggleSeen = (activityId: string) => {
+  activityStore.toggleSeen(activityId)
+}
+
+const handleToggleImportant = (activityId: string) => {
+  activityStore.toggleImportant(activityId)
+}
+
 </script>
 
 <template>
@@ -524,18 +502,14 @@ const handleActivityClick = (orderId: string) => {
 
       <!-- Filters -->
       <OrderFilters
-        v-model:view-mode="viewMode"
         v-model:status-filter="statusFilter"
         v-model:order-by="orderBy"
-        v-model:kanban-columns-filter="kanbanColumnsFilter"
         v-model:search-query="searchQuery"
-        :view-options="viewOptions"
-        :table-filters="tableFilterConfigs"
-        :kanban-filters="kanbanFilterConfigs"
+        :table-filters="filterConfigs"
       />
 
       <!-- Content -->
-      <div v-if="viewMode === 'table'" class="flex-1 min-h-0 w-full overflow-auto">
+      <div class="flex-1 min-h-0 w-full overflow-auto">
         <DriverItemList
           :orders="deliverableOrders"
           :selected-ids="selectedOrderIds"
@@ -545,16 +519,6 @@ const handleActivityClick = (orderId: string) => {
           @deselect-all="deselectAll"
         />
       </div>
-
-      <div v-if="viewMode === 'kanban'" class="flex-1 min-h-0 w-full overflow-auto">
-        <KanbanBoard
-          :columns="driverKanbanColumns"
-          :items="filteredItems"
-          :visible-columns="visibleKanbanColumns"
-          :readonly="true"
-          @item-click="openOrderDetail"
-        />
-      </div>
     </div>
 
     <!-- Activity Feed Sidebar -->
@@ -562,6 +526,8 @@ const handleActivityClick = (orderId: string) => {
       <ActivityFeed
         :activities="filteredActivities"
         @activity-click="handleActivityClick"
+        @toggle-seen="handleToggleSeen"
+        @toggle-important="handleToggleImportant"
       />
     </div>
   </div>

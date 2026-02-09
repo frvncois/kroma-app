@@ -93,9 +93,9 @@ const isTerminalStatus = (status: ItemStatus) => {
 </script>
 
 <template>
-  <div class="w-full">
+  <div class="w-full border rounded-xl">
     <!-- Header Row -->
-    <div class="grid grid-cols-[1fr_1fr_1fr_minmax(200px,auto)] gap-4 text-xs font-medium text-muted-foreground uppercase tracking-wider py-2 px-4 border-b bg-muted/30">
+    <div class="grid grid-cols-[1fr_1fr_1fr_minmax(200px,auto)] gap-4 text-xs font-medium text-background tracking-wider rounded-t-xl py-2 px-4 bg-foreground">
       <div>Item</div>
       <div>Details</div>
       <div>Timeline</div>
@@ -112,7 +112,7 @@ const isTerminalStatus = (status: ItemStatus) => {
     <div
       v-for="item in items"
       :key="item.id"
-      class="grid grid-cols-[1fr_1fr_1fr_minmax(200px,auto)] gap-4 border-b hover:bg-accent/50 transition-colors cursor-pointer py-3 px-4"
+      class="grid grid-cols-[1fr_1fr_1fr_minmax(200px,auto)] gap-4 border-t hover:bg-accent/50 transition-colors cursor-pointer pt-3 pb-4 px-4"
       @click="handleRowClick(item.id, $event)"
     >
       <!-- Column 1: Item -->

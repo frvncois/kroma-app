@@ -23,6 +23,7 @@ interface Props {
   orderId?: string | null
   isOpen: boolean
   showPayment?: boolean
+  showAddresses?: boolean
   showFiles?: boolean
   side?: 'left' | 'right'
   zIndex?: number
@@ -34,6 +35,7 @@ interface Emits {
 
 const props = withDefaults(defineProps<Props>(), {
   showPayment: true,
+  showAddresses: true,
   showFiles: true,
   side: 'right',
   zIndex: 60,
@@ -433,18 +435,16 @@ const departmentOptions = [
                     </a>
                   </div>
                 </div>
-                <div class="border-t pt-3">
-                  <Label class="text-xs text-muted-foreground mb-1 block">Delivery Address</Label>
-                  <div class="text-sm">{{ order.customer.address }}</div>
-                </div>
-                <div class="border-t pt-3">
-                  <Label class="text-xs text-muted-foreground mb-1 block">Billing Address</Label>
-                  <div class="text-sm">{{ order.customer.address }}</div>
-                </div>
-                <div v-if="order.customer.notes" class="border-t pt-3">
-                  <Label class="text-xs text-muted-foreground mb-1 block">Customer Notes</Label>
-                  <div class="text-sm">{{ order.customer.notes }}</div>
-                </div>
+                <template v-if="showAddresses">
+                  <div class="border-t pt-3">
+                    <Label class="text-xs text-muted-foreground mb-1 block">Delivery Address</Label>
+                    <div class="text-sm">{{ order.customer.address }}</div>
+                  </div>
+                  <div class="border-t pt-3">
+                    <Label class="text-xs text-muted-foreground mb-1 block">Billing Address</Label>
+                    <div class="text-sm">{{ order.customer.address }}</div>
+                  </div>
+                </template>
               </div>
 
               <!-- Order Info -->
@@ -490,6 +490,11 @@ const departmentOptions = [
                 <div>
                   <Label class="text-xs text-muted-foreground mb-1 block">Created</Label>
                   <div class="text-sm">{{ formatDate(order.created_at) }}</div>
+                </div>
+
+                <div v-if="order.customer.notes" class="border-t pt-3">
+                  <Label class="text-xs text-muted-foreground mb-1 block">Customer Notes</Label>
+                  <div class="text-sm">{{ order.customer.notes }}</div>
                 </div>
               </div>
             </div>

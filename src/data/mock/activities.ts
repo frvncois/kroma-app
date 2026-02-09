@@ -10,6 +10,8 @@ export const activities: Activity[] = [
     type: 'pickup',
     timestamp: minutesAgo(5),
     user: 'Sarah Chen',
+    seen: false,
+    important: false,
     item: {
       id: 'item-1',
       name: 'Business Cards - 500x',
@@ -29,6 +31,8 @@ export const activities: Activity[] = [
     type: 'status_change',
     timestamp: minutesAgo(12),
     user: 'Marc Dubois',
+    seen: false,
+    important: false,
     item: {
       id: 'item-2',
       name: 'Vinyl Banner - 4x8ft',
@@ -50,6 +54,8 @@ export const activities: Activity[] = [
     type: 'note_added',
     timestamp: minutesAgo(23),
     user: 'Julie Martin',
+    seen: false,
+    important: false,
     item: {
       id: 'item-3',
       name: 'Poster Print - A1 size',
@@ -70,6 +76,8 @@ export const activities: Activity[] = [
     type: 'delivery',
     timestamp: minutesAgo(45),
     user: 'Driver - Jean',
+    seen: false,
+    important: false,
     item: {
       id: 'item-4',
       name: 'Corrugated Signs - 10x',
@@ -89,6 +97,8 @@ export const activities: Activity[] = [
     type: 'assignment',
     timestamp: minutesAgo(67),
     user: 'Manager - Claude',
+    seen: false,
+    important: false,
     item: {
       id: 'item-5',
       name: 'Decals Custom - 200x',
@@ -108,6 +118,8 @@ export const activities: Activity[] = [
     type: 'status_change',
     timestamp: minutesAgo(89),
     user: 'Victor Printshop',
+    seen: false,
+    important: false,
     item: {
       id: 'item-6',
       name: 'Brochure Printing - 1000x',
@@ -129,6 +141,8 @@ export const activities: Activity[] = [
     type: 'order_created',
     timestamp: minutesAgo(105),
     user: 'Shopify - Imp. Quebec',
+    seen: false,
+    important: false,
     order: {
       id: 'order-7',
       externalId: 'IQ-2024-003',
@@ -143,6 +157,8 @@ export const activities: Activity[] = [
     type: 'note_added',
     timestamp: minutesAgo(134),
     user: 'Sarah Chen',
+    seen: false,
+    important: false,
     item: {
       id: 'item-8',
       name: 'Vehicle Wrap',
@@ -163,6 +179,8 @@ export const activities: Activity[] = [
     type: 'pickup',
     timestamp: minutesAgo(167),
     user: 'Customer Pickup',
+    seen: false,
+    important: false,
     item: {
       id: 'item-9',
       name: 'Photo Prints - 50x',
@@ -182,6 +200,8 @@ export const activities: Activity[] = [
     type: 'status_change',
     timestamp: minutesAgo(198),
     user: 'In House Printshop',
+    seen: false,
+    important: false,
     item: {
       id: 'item-10',
       name: 'T-Shirt Printing - 100x',
@@ -203,6 +223,8 @@ export const activities: Activity[] = [
     type: 'delivery',
     timestamp: minutesAgo(223),
     user: 'Driver - Jean',
+    seen: false,
+    important: false,
     item: {
       id: 'item-11',
       name: 'Window Graphics',
@@ -222,6 +244,8 @@ export const activities: Activity[] = [
     type: 'order_created',
     timestamp: minutesAgo(256),
     user: 'Web Form',
+    seen: false,
+    important: false,
     order: {
       id: 'order-12',
       customer: 'Non-Profit Organization'

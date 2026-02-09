@@ -22,7 +22,7 @@ import Input from '@/components/ui/Input.vue'
 
 const props = defineProps<{
   columns: ColumnDef<TData, TValue>[]
-  data: TData[]
+  data: TData[] 
   searchKey?: string
   searchPlaceholder?: string
   gridTemplateColumns?: string

@@ -14,7 +14,7 @@ import {
   printshopKanbanColumns,
 } from '@/lib/constants'
 import PrintshopItemList from '@/components/PrintshopItemList.vue'
-import ItemDetailSheet from '@/components/ItemDetailSheet.vue'
+import OrderDetailSheet from '@/components/OrderDetailSheet.vue'
 import ActivityFeed from '@/components/ActivityFeed.vue'
 import OrderFilters from '@/components/OrderFilters.vue'
 import KanbanBoard from '@/components/KanbanBoard.vue'
@@ -84,12 +84,15 @@ const filteredActivities = computed(() => {
 })
 
 // Sheet state
-const selectedItemId = ref<string | null>(null)
+const selectedOrderId = ref<string | null>(null)
 const isSheetOpen = ref(false)
 
 const openItemDetail = (itemId: string) => {
-  selectedItemId.value = itemId
-  isSheetOpen.value = true
+  const item = myItems.value.find(i => i.id === itemId)
+  if (item) {
+    selectedOrderId.value = item.order_id
+    isSheetOpen.value = true
+  }
 }
 
 // Handle openItem query param (from command palette or deep links)
@@ -106,6 +109,14 @@ const handleActivityClick = (orderId: string) => {
   if (item) {
     openItemDetail(item.id)
   }
+}
+
+const handleToggleSeen = (activityId: string) => {
+  activityStore.toggleSeen(activityId)
+}
+
+const handleToggleImportant = (activityId: string) => {
+  activityStore.toggleImportant(activityId)
 }
 
 // View mode
@@ -204,9 +215,9 @@ const handleKanbanItemClick = (orderId: string) => {
 </script>
 
 <template>
-  <div class="h-full mr-80 overflow-hidden w-full">
+  <div class="h-full mr-80 w-full">
     <!-- Main Content -->
-    <div class="flex h-full flex-col space-y-10 p-10 overflow-hidden">
+    <div class="flex h-full flex-col space-y-10 p-10">
       <!-- Header -->
       <div class="flex items-center justify-between flex-shrink-0">
         <div>
@@ -230,7 +241,7 @@ const handleKanbanItemClick = (orderId: string) => {
       />
 
       <!-- Content -->
-      <div v-if="viewMode === 'table'" class="flex-1 min-h-0 w-full overflow-auto">
+      <div v-if="viewMode === 'table'" class="w-full pb-20">
         <PrintshopItemList
           :items="filteredItems"
           :allowed-statuses="allowedStatuses"
@@ -256,13 +267,17 @@ const handleKanbanItemClick = (orderId: string) => {
       <ActivityFeed
         :activities="filteredActivities"
         @activity-click="handleActivityClick"
+        @toggle-seen="handleToggleSeen"
+        @toggle-important="handleToggleImportant"
       />
     </div>
 
-    <!-- Item Detail Sheet -->
-    <ItemDetailSheet
-      :item-id="selectedItemId"
+    <!-- Order Detail Sheet -->
+    <OrderDetailSheet
+      :order-id="selectedOrderId"
       :is-open="isSheetOpen"
+      :show-payment="false"
+      :show-addresses="false"
       @update:is-open="isSheetOpen = $event"
     />
   </div>

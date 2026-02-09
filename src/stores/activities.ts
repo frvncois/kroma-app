@@ -16,6 +16,20 @@ export const useActivityStore = defineStore('activities', () => {
     activities.value.unshift(activity)
   }
 
+  function toggleSeen(activityId: string) {
+    const activity = activities.value.find(a => a.id === activityId)
+    if (activity) {
+      activity.seen = !activity.seen
+    }
+  }
+
+  function toggleImportant(activityId: string) {
+    const activity = activities.value.find(a => a.id === activityId)
+    if (activity) {
+      activity.important = !activity.important
+    }
+  }
+
   return {
     // State
     activities,
@@ -23,5 +37,7 @@ export const useActivityStore = defineStore('activities', () => {
     allActivities,
     // Actions
     addActivity,
+    toggleSeen,
+    toggleImportant,
   }
 })

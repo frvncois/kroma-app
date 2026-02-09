@@ -25,9 +25,11 @@ const navItems: NavItem[] = [
   // Manager routes
   { to: '/manager/orders', label: 'Orders', roles: ['manager'] },
   { to: '/manager/customers', label: 'Customers', roles: ['manager'] },
+  { to: '/manager/archives', label: 'Archives', roles: ['manager'] },
 
   // Printshop Manager routes
   { to: '/printshop/queue', label: 'Production Queue', roles: ['printshop_manager'] },
+  { to: '/printshop/archives', label: 'Archives', roles: ['printshop_manager'] },
 
   // Driver routes
   { to: '/driver/deliveries', label: 'Deliveries', roles: ['driver'] },
