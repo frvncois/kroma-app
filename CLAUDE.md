@@ -118,7 +118,9 @@ Since tracking is item-level, order status is derived:
 |-------------------|-------------------|----------------|----------|
 | manager@kroma.com | manager           | [] (all)       | 1234     |
 | victor@kroma.com  | printshop_manager | ['victor']     | 1234     |
-| driver@kroma.com  | driver            | []             | 1234     |
+| alex@kroma.com    | driver            | []             | 1234     |
+| sam@kroma.com     | driver            | []             | 1234     |
+| jordan@kroma.com  | driver            | []             | 1234     |
 
 ## Project Structure
 
@@ -138,12 +140,14 @@ src/
 │   ├── formatters.ts              formatDate, formatStatus, formatPrintshop, formatCurrency, etc.
 │   ├── variants.ts                getStatusVariant, getPaymentVariant, color maps
 │   ├── constants.ts               Filter options, kanban columns, domain enums
+│   ├── route-service.ts           OpenAI route generation & recalculation
 │   └── utils.ts                   cn() and general helpers
 ├── stores/                     ← Pinia stores (single source of truth)
 │   ├── auth.ts                    currentUser, login/logout, role getters
 │   ├── orders.ts                  orders + orderItems state, mutations, computed joins
 │   ├── customers.ts               customers state
 │   ├── printshops.ts              printshops state, getPrintshopById, getPrintshopName
+│   ├── drivers.ts                 Active drivers, routes, assignments, locked items
 │   └── activities.ts              activity feed state
 ├── composables/                ← Thin wrappers around stores (stable API for components)
 │   ├── useOrders.ts               Wraps useOrderStore()
@@ -174,7 +178,12 @@ src/
 │   ├── NotesSection.vue           Reusable notes CRUD
 │   ├── OrderDetailSheet.vue       Order detail slide-out
 │   ├── NewOrderSheet.vue          Manual order creation
+│   ├── CustomerDetailSheet.vue    Customer profile + order history sheet
+│   ├── NewCustomerSheet.vue       Create new customer form sheet
 │   ├── DriverTaskSheet.vue        Ad-hoc driver tasks
+│   ├── StartRouteDialog.vue       Shift end time input before route generation
+│   ├── TransferDialog.vue         Transfer items between active drivers
+│   ├── RouteMap.vue               Mapbox GL route visualization with markers & lines
 │   ├── ActivityFeed.vue           Right sidebar activity feed
 │   └── ItemStatusCombobox.vue     Status dropdown
 ├── views/
@@ -186,7 +195,8 @@ src/
 │   ├── printshop/
 │   │   └── PrintshopQueue.vue     Production kanban queue
 │   └── driver/
-│       └── DriverDeliveries.vue   Delivery queue + route
+│       ├── DriverDeliveries.vue   Delivery queue + route
+│       └── DriverArchives.vue     Delivery history table
 └── router/index.ts                Auth guards, role-based routing
 ```
 
@@ -206,6 +216,10 @@ src/
 - Import directly from `src/data/mock/*` in components — go through stores/composables
 - Define formatters or constants inline in view components — use `src/lib/`
 - Store `files_count`, `comments_count`, or `delivery_date` on the Order interface — these are computed
+- Pass `activityStore.allActivities` directly to ActivityFeed in role views — always use `getActivitiesForRole()`
+- Call OpenAI from components directly — always go through `route-service.ts`
+- Modify completed stops in a recalculation
+- Allow unassigning locked (picked-up) items without a transfer
 
 ### Do
 - Keep view files under 300 lines — extract sub-components
@@ -214,6 +228,14 @@ src/
 - Use `src/lib/constants.ts` for filter options and domain enums
 - Use the `ItemControls.vue` component for any item editing UI (status, printshop, dates)
 - Respect role permissions — use auth store getters to conditionally show/hide controls
+- Use `getAllItems()` when you need all items regardless of printshop — not `getItemsByPrintshop(null)`
+- Use `getOrdersByCustomerId()` to get a customer's orders — don't filter ordersWithDetails manually in components
+- Use `addCustomer()` store action for customer creation — don't push to the array directly
+- Use `driverStore.isItemAssignedToOtherDriver()` to filter items in driver views
+- Use `driverStore.lockItemsAtStop()` when a pickup stop is completed
+- Use `recalculateRoute()` (not `generateRoute()`) for mid-route updates
+- Use `RouteMap` component only in route mode — don't render it when there's no active route
+- Always pass lat/lng on route stops (from printshop/customer data)
 
 ### Customer Matching
 On order ingestion, match customer by email. If no match, create new customer record. Managers can merge duplicates later.
@@ -223,11 +245,81 @@ On order ingestion, match customer by email. If no match, create new customer re
 - File types: `artwork`, `proof`, `reference`, `other`
 - Phase 1: mock data only (no upload). Phase 2: Supabase Storage
 
-### Route Optimization Logic
-- Driver selects orders for delivery run
-- System computes stops: pickups at printshop locations + dropoffs at customer addresses
-- Constraint: pickups before related dropoffs
-- Uses Google Directions API with waypoint optimization (Phase 4)
+### Activity Feed Scoping
+- Activities are scoped per role via `activityStore.getActivitiesForRole()`
+- Views pass scoped activities to `<ActivityFeed>` — the component itself is role-agnostic
+- Manager sees all, Printshop Manager sees their shop's items, Driver sees delivery-related
+- Scoping is computed at read time from activity metadata — no stored scope field
+
+### Dual-Sheet Pattern
+The Customers view demonstrates the dual-sheet pattern:
+- CustomerDetailSheet opens on the RIGHT (default z-index 50)
+- Clicking an order inside it opens OrderDetailSheet on the LEFT (z-index 70)
+- Both sheets are visible simultaneously
+- Closing the customer sheet also closes the order sheet
+- This pattern can be reused wherever a detail sheet needs to link to another entity's detail
+
+### AI Route Optimization (OpenAI)
+The driver route system uses OpenAI (gpt-4o) to generate optimized delivery routes.
+
+**Flow:**
+1. Driver sees all ready deliveries grouped by priority (no manual selection)
+2. Driver clicks "Start Route" → enters shift end time
+3. System builds a structured prompt with all stops, addresses, priorities, constraints
+4. OpenAI returns an ordered route with ETAs and travel times
+5. Route is stored in driverStore and driver enters ROUTE MODE
+
+**Key rules:**
+- Pickups MUST happen before their related deliveries (constraint sent to AI)
+- 15 minutes per stop (pickup or delivery)
+- Stops that don't fit in shift are marked `fitsInShift: false`
+- API key: `VITE_OPENAI_API_KEY` in `.env` (Phase 1 only, moves to serverless in Phase 2)
+
+**Mid-route updates:**
+- When a manager/printshop sets new items to "ready", a watcher detects them
+- They appear in `pendingNewItemIds` on the route
+- Driver sees a banner and can "Add to Route" which triggers recalculation
+- Completed stops are NEVER moved — only remaining stops are reoptimized
+
+**Multi-driver:**
+- Active drivers tracked in `driverStore.activeDriverSessions`
+- Items assigned to one driver are hidden from other drivers' queues
+- Locked items (physically picked up) can only be transferred, not unassigned
+- Transfer sends items to another active driver's pending queue
+
+**Adding a new driver:**
+1. Add to `src/data/mock/users.ts` with role 'driver'
+2. When they log in, auth store auto-registers their session in driverStore
+
+### Mapbox Map (Route Visualization)
+The driver route view includes a live Mapbox GL map showing the full route with color-coded stops and road-following lines.
+
+**Component:** `RouteMap.vue` — self-contained map with markers, route lines, and Mapbox Directions API integration
+
+**Map elements:**
+- 🏠 Home base marker (dark circle with house icon) at 4641 Av. Papineau
+- ✅ Completed stops — green pins with checkmark
+- 📍 Current stop — large blue pulsing pin with sequence number
+- ⚪ Upcoming stops — gray pins with sequence numbers
+- 🚫 Cancelled stops — red pins with X
+
+**Route lines:**
+- Solid green line — completed segments (thicker, 5px)
+- Solid blue line — current segment (to active stop, 6px)
+- Dashed gray line — upcoming segments (4px, dashed)
+
+**Line rendering:**
+- Lines follow actual roads via Mapbox Directions API (`/directions/v5/mapbox/driving/`)
+- Requires `api.mapbox.com` in allowed network domains
+- Graceful fallback to straight lines if API blocked
+- Supports up to 25 waypoints per request (chunks larger routes)
+
+**Token:** `VITE_MAPBOX_TOKEN` in `.env`
+
+**Interaction:**
+- Click marker → popup with stop info (name, address, ETA, status)
+- Click stop in sidebar → map flies to that stop
+- Auto-fits bounds to show all markers on initial render
 
 ## Integration Points
 

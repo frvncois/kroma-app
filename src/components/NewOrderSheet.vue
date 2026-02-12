@@ -12,7 +12,7 @@ import FilterSelect from '@/components/ui/FilterSelect.vue'
 import Textarea from '@/components/ui/Textarea.vue'
 import Label from '@/components/ui/Label.vue'
 import Badge from '@/components/ui/Badge.vue'
-import DateInput from '@/components/ui/DateInput.vue'
+import DatePicker from '@/components/ui/DatePicker.vue'
 import ItemControls from '@/components/ItemControls.vue'
 import NotesSection from '@/components/NotesSection.vue'
 import { User, Package, Paperclip, ChevronDown, ChevronRight, X } from 'lucide-vue-next'
@@ -373,7 +373,9 @@ const cancel = () => {
       <div>
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-semibold flex items-center gap-2">
-            <User class="h-5 w-5" />
+            <div class="p-2 bg-accent rounded-lg">
+              <User class="h-4 w-4" />
+            </div>
             Customer & Order Information
           </h3>
           <Badge :variant="deliveryMethod === 'delivery' ? 'default' : 'secondary'">
@@ -568,7 +570,9 @@ const cancel = () => {
       <div>
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-semibold flex items-center gap-2">
-            <Package class="h-5 w-5" />
+            <div class="p-2 bg-accent rounded-lg">
+              <Package class="h-4 w-4" />
+            </div>
             Order Items ({{ items.length }})
           </h3>
           <Button size="sm" @click="addItem">+ Add Item</Button>
@@ -678,7 +682,9 @@ const cancel = () => {
       <!-- Files -->
       <div>
         <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-          <Paperclip class="h-5 w-5" />
+          <div class="p-2 bg-accent rounded-lg">
+            <Paperclip class="h-4 w-4" />
+          </div>
           Files
         </h3>
         <Card>

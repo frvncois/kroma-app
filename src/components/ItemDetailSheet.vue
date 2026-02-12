@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useOrders } from '@/composables/useOrders'
 import { useOrderItems } from '@/composables/useOrderItems'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import type { ItemStatus, OrderNote, NoteDepartment } from '@/types'
-import { formatDate, formatDateDisplay, formatStatus } from '@/lib/formatters'
+import { formatDate, formatStatus, formatSource } from '@/lib/formatters'
 import { getStatusVariant } from '@/lib/variants'
 import Sheet from '@/components/ui/Sheet.vue'
 import Card from '@/components/ui/Card.vue'
 import CardContent from '@/components/ui/CardContent.vue'
+import Label from '@/components/ui/Label.vue'
 import Badge from '@/components/ui/Badge.vue'
 import ItemStatusCombobox from '@/components/ItemStatusCombobox.vue'
 import NotesSection from '@/components/NotesSection.vue'
-import { Package, User, Paperclip, ChevronDown, ChevronRight, FileText } from 'lucide-vue-next'
+import { Package, User, Paperclip, ChevronDown, ChevronRight, Clock } from 'lucide-vue-next'
 
 interface Props {
   itemId: string | null
@@ -40,8 +41,24 @@ const authStore = useAuthStore()
 const item = computed(() => props.itemId ? getItemById(props.itemId) : null)
 const order = computed(() => item.value ? getOrderById(item.value.order_id) : null)
 
-// Allowed statuses for printshop manager
-const allowedStatuses: ItemStatus[] = ['in_production', 'on_hold', 'ready', 'picked_up', 'canceled']
+// Role-based permissions
+const isManager = computed(() => authStore.isManager)
+const isPrintshopManager = computed(() => authStore.isPrintshopManager)
+const isDriver = computed(() => authStore.isDriver)
+
+// Allowed statuses based on role
+const allowedStatuses = computed<ItemStatus[]>(() => {
+  if (isManager.value) {
+    return ['new', 'assigned', 'in_production', 'on_hold', 'ready', 'out_for_delivery', 'delivered', 'picked_up', 'canceled']
+  }
+  if (isPrintshopManager.value) {
+    return ['in_production', 'on_hold', 'ready', 'picked_up', 'canceled']
+  }
+  if (isDriver.value) {
+    return ['out_for_delivery', 'delivered', 'on_hold', 'canceled']
+  }
+  return []
+})
 
 // Section expansion state
 const isOrderContextExpanded = ref(false)
@@ -80,42 +97,19 @@ const files = computed(() => {
   return allFiles.value.filter(f => f.order_item_id === item.value!.id)
 })
 
-// Notes (show all order notes)
-const notes = ref<OrderNote[]>([
-  {
-    id: 'note-1',
-    content: 'Customer requested rush delivery for this order.',
-    departments: ['everyone'],
-    created_at: '2024-01-25T09:15:00Z',
-    created_by: 'John Smith',
-    item_reference: null
-  },
-  {
-    id: 'note-2',
-    content: 'Please use premium cardstock for this item.',
-    departments: ['printshop'],
-    created_at: '2024-01-25T10:30:00Z',
-    created_by: 'Sarah Johnson',
-    item_reference: null
-  },
-])
+// Format specs
+const formatSpecs = (specs: any): string => {
+  if (!specs) return '—'
+  if (typeof specs === 'string') return specs
+  if (typeof specs === 'object') {
+    const entries = Object.entries(specs)
+    if (entries.length === 0) return '—'
+    return entries.map(([k, v]) => `${k}: ${v}`).join(', ')
+  }
+  return '—'
+}
 
-// Department options (limited for printshop manager)
-const departmentOptions = [
-  { value: 'printshop', label: 'Printshop' },
-  { value: 'everyone', label: 'Everyone' },
-]
-
-// Item reference options (for notes)
-const itemOptions = computed(() => {
-  if (!order.value) return []
-  return order.value.items.map(item => ({
-    value: item.id,
-    label: item.product_name
-  }))
-})
-
-// Handle status change
+// Status change handler
 const handleStatusChange = (itemId: string, newStatus: ItemStatus) => {
   updateItemStatus(itemId, newStatus)
   toast({
@@ -124,61 +118,78 @@ const handleStatusChange = (itemId: string, newStatus: ItemStatus) => {
   })
 }
 
-// Note handlers
-const handleAddNote = (content: string, departments: NoteDepartment[], itemReference: string | null) => {
-  const note: OrderNote = {
-    id: `note-${Date.now()}`,
-    content,
-    departments,
-    created_at: new Date().toISOString(),
-    created_by: authStore.currentUser?.name || 'Unknown',
-    item_reference: itemReference
+// Notes
+const mockNotes: OrderNote[] = []
+
+const noteItemOptions = computed(() => {
+  if (!order.value) return [{ value: 'order', label: 'Order-level note' }]
+
+  const options = [{ value: 'order', label: 'Order-level note' }]
+
+  if (order.value.items) {
+    order.value.items.forEach(item => {
+      options.push({
+        value: item.id,
+        label: item.product_name
+      })
+    })
   }
-  notes.value.unshift(note)
-  console.log('Added note:', note)
+
+  return options
+})
+
+const noteDepartmentOptions = computed(() => {
+  if (isPrintshopManager.value) {
+    return [
+      { value: 'everyone', label: 'Everyone' },
+      { value: 'printshop', label: 'Printshop' }
+    ]
+  }
+
+  return [
+    { value: 'everyone', label: 'Everyone' },
+    { value: 'printshop', label: 'Printshop' },
+    { value: 'delivery', label: 'Delivery' },
+    { value: 'billing', label: 'Billing' }
+  ]
+})
+
+const handleAddNote = (content: string, departments: NoteDepartment[], itemReference: string | null) => {
+  console.log('Add note:', { content, departments, itemReference })
+  toast({ title: 'Note added', description: 'Note functionality coming in Phase 2' })
 }
 
 const handleEditNote = (noteId: string, newContent: string) => {
-  const note = notes.value.find(n => n.id === noteId)
-  if (note) {
-    note.content = newContent
-  }
+  console.log('Edit note:', noteId, newContent)
 }
 
 const handleDeleteNote = (noteId: string) => {
-  const index = notes.value.findIndex(n => n.id === noteId)
-  if (index !== -1) {
-    notes.value.splice(index, 1)
-  }
-}
-
-const formatSpecs = (specs: Record<string, any>): string => {
-  return Object.entries(specs)
-    .map(([key, value]) => `${key}: ${value}`)
-    .join(', ')
-}
-
-const formatFileType = (type: string): string => {
-  return type.toUpperCase()
+  console.log('Delete note:', noteId)
 }
 </script>
 
 <template>
-  <Sheet :open="isOpen" @update:open="emit('update:isOpen', $event)" :side="side">
-    <div v-if="item && order" class="flex h-full flex-col">
+  <Sheet
+    :is-open="isOpen"
+    @update:is-open="emit('update:isOpen', $event)"
+    :side="side"
+  >
+    <div v-if="!item || !order" class="flex h-full items-center justify-center">
+      <p class="text-sm text-muted-foreground">No item selected</p>
+    </div>
+
+    <div v-else class="flex h-full flex-col">
       <!-- Header -->
-      <div class="border-b px-6 py-4">
-        <div class="flex items-start justify-between">
-          <div>
-            <h2 class="text-lg font-semibold">{{ item.product_name }}</h2>
-            <p class="text-sm text-muted-foreground">
-              Order #{{ order.external_id || order.id.slice(0, 8) }} • {{ order.customer.name }}
-            </p>
-          </div>
-          <Badge :variant="getStatusVariant(item.status)">
-            {{ formatStatus(item.status) }}
-          </Badge>
+      <div class="flex items-center justify-between border-b px-6 py-4">
+        <div>
+          <h2 class="text-xl font-semibold">{{ item.product_name }}</h2>
+          <p class="text-sm text-muted-foreground">
+            Order #{{ order.external_id || order.id.slice(0, 8) }} • {{ order.customer.name }}
+          </p>
         </div>
+        <Badge :variant="getStatusVariant(item.status)">
+          {{ formatStatus(item.status) }}
+        </Badge>
       </div>
 
       <!-- Content -->
@@ -186,68 +197,81 @@ const formatFileType = (type: string): string => {
         <!-- Section 1: Item Details -->
         <Card>
           <CardContent class="pt-6">
+            <h3 class="text-lg font-medium mb-4 flex items-center gap-2">
+              <div class="p-2 bg-accent rounded-lg">
+                <Package class="h-4 w-4" />
+              </div>
+              Item Details
+            </h3>
+
             <div class="space-y-4">
+              <!-- Product Name -->
               <div>
-                <div class="flex items-center gap-2 mb-4">
-                  <Package class="h-4 w-4 text-muted-foreground" />
-                  <h3 class="font-medium">Item Details</h3>
+                <Label class="text-xs text-muted-foreground mb-1 block">Product</Label>
+                <div class="text-sm font-medium">{{ item.product_name }}</div>
+              </div>
+
+              <!-- Grid: Quantity, Status -->
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <Label class="text-xs text-muted-foreground mb-1 block">Quantity</Label>
+                  <div class="text-sm">{{ item.quantity }}</div>
                 </div>
 
-                <div class="space-y-3">
-                  <div class="grid grid-cols-3 gap-4">
-                    <div>
-                      <div class="text-xs text-muted-foreground mb-1">Product</div>
-                      <div class="text-sm font-medium">{{ item.product_name }}</div>
-                    </div>
-                    <div>
-                      <div class="text-xs text-muted-foreground mb-1">Quantity</div>
-                      <div class="text-sm">{{ item.quantity }}</div>
-                    </div>
-                    <div>
-                      <div class="text-xs text-muted-foreground mb-1">Status</div>
-                      <ItemStatusCombobox
-                        :model-value="item.status"
-                        :item-id="item.id"
-                        :allowed-statuses="allowedStatuses"
-                        @update:model-value="handleStatusChange"
-                      />
-                    </div>
-                  </div>
+                <div>
+                  <Label class="text-xs text-muted-foreground mb-1 block">Status</Label>
+                  <ItemStatusCombobox
+                    :model-value="item.status"
+                    :item-id="item.id"
+                    :allowed-statuses="allowedStatuses"
+                    @update:model-value="handleStatusChange"
+                  />
+                </div>
+              </div>
 
-                  <div v-if="item.description">
-                    <div class="text-xs text-muted-foreground mb-1">Description</div>
-                    <div class="text-sm">{{ item.description }}</div>
-                  </div>
+              <!-- Due Date -->
+              <div>
+                <Label class="text-xs text-muted-foreground mb-1 block">Due Date</Label>
+                <div class="text-sm">
+                  {{ item.due_date ? formatDate(item.due_date) : 'No due date' }}
+                </div>
+              </div>
 
-                  <div v-if="item.specs && Object.keys(item.specs).length > 0">
-                    <div class="text-xs text-muted-foreground mb-1">Specifications</div>
-                    <div class="text-sm">{{ formatSpecs(item.specs) }}</div>
-                  </div>
+              <!-- Description -->
+              <div v-if="item.description">
+                <Label class="text-xs text-muted-foreground mb-1 block">Description</Label>
+                <div class="text-sm">{{ item.description }}</div>
+              </div>
 
+              <!-- Specifications -->
+              <div v-if="item.specs">
+                <Label class="text-xs text-muted-foreground mb-1 block">Specifications</Label>
+                <div class="text-sm">{{ formatSpecs(item.specs) }}</div>
+              </div>
+
+              <!-- Timeline -->
+              <div class="border-t pt-3">
+                <Label class="text-xs text-muted-foreground mb-2 block flex items-center gap-1">
+                  <Clock class="h-3 w-3" />
+                  Timeline
+                </Label>
+                <div class="grid grid-cols-3 gap-4">
                   <div>
-                    <div class="text-xs text-muted-foreground mb-1">Due Date</div>
+                    <div class="text-xs text-muted-foreground">Production Start</div>
                     <div class="text-sm">
-                      {{ item.due_date ? formatDateDisplay(item.due_date) : 'Not set' }}
-                      <span v-if="item.due_date" class="text-xs text-muted-foreground ml-2">(Read-only)</span>
+                      {{ item.production_start_date ? formatDate(item.production_start_date) : '—' }}
                     </div>
                   </div>
-
-                  <!-- Timeline -->
-                  <div class="pt-2 border-t">
-                    <div class="text-xs text-muted-foreground mb-2">Timeline</div>
-                    <div class="space-y-1 text-xs">
-                      <div v-if="item.production_start_date" class="flex justify-between">
-                        <span class="text-muted-foreground">Production started:</span>
-                        <span>{{ formatDateDisplay(item.production_start_date) }}</span>
-                      </div>
-                      <div v-if="item.production_ready_date" class="flex justify-between">
-                        <span class="text-muted-foreground">Ready:</span>
-                        <span>{{ formatDateDisplay(item.production_ready_date) }}</span>
-                      </div>
-                      <div v-if="item.delivery_date" class="flex justify-between">
-                        <span class="text-muted-foreground">Delivered:</span>
-                        <span>{{ formatDateDisplay(item.delivery_date) }}</span>
-                      </div>
+                  <div>
+                    <div class="text-xs text-muted-foreground">Production Ready</div>
+                    <div class="text-sm">
+                      {{ item.production_ready_date ? formatDate(item.production_ready_date) : '—' }}
+                    </div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-muted-foreground">Delivered</div>
+                    <div class="text-sm">
+                      {{ item.delivery_date ? formatDate(item.delivery_date) : '—' }}
                     </div>
                   </div>
                 </div>
@@ -256,54 +280,69 @@ const formatFileType = (type: string): string => {
           </CardContent>
         </Card>
 
-        <!-- Section 2: Order Context (collapsed by default) -->
+        <!-- Section 2: Order Context (Collapsible) -->
         <Card>
           <CardContent class="pt-6">
             <button
               @click="isOrderContextExpanded = !isOrderContextExpanded"
-              class="flex items-center justify-between w-full text-left"
+              class="w-full flex items-center justify-between mb-4 hover:opacity-70 transition-opacity"
             >
-              <div class="flex items-center gap-2">
-                <User class="h-4 w-4 text-muted-foreground" />
-                <h3 class="font-medium">Order Context</h3>
-              </div>
-              <ChevronDown
-                :class="['h-4 w-4 transition-transform', isOrderContextExpanded ? 'rotate-180' : '']"
-              />
+              <h3 class="text-lg font-medium flex items-center gap-2">
+                <div class="p-2 bg-accent rounded-lg">
+                  <User class="h-4 w-4" />
+                </div>
+                Order Context
+              </h3>
+              <ChevronDown v-if="!isOrderContextExpanded" class="h-5 w-5 text-muted-foreground" />
+              <ChevronRight v-else class="h-5 w-5 text-muted-foreground" />
             </button>
 
-            <div v-if="isOrderContextExpanded" class="mt-4 space-y-3 text-sm">
-              <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <div class="text-xs text-muted-foreground mb-1">Customer</div>
-                  <div>{{ order.customer.name }}</div>
-                </div>
-                <div>
-                  <div class="text-xs text-muted-foreground mb-1">Email</div>
-                  <div>{{ order.customer.email }}</div>
+            <div v-if="isOrderContextExpanded" class="space-y-4">
+              <!-- Customer Info -->
+              <div>
+                <Label class="text-xs text-muted-foreground mb-1 block">Customer</Label>
+                <div class="text-sm font-medium">{{ order.customer.name }}</div>
+                <div v-if="order.customer.company" class="text-sm text-muted-foreground">
+                  {{ order.customer.company }}
                 </div>
               </div>
 
-              <div v-if="order.customer.company" class="grid grid-cols-2 gap-4">
-                <div>
-                  <div class="text-xs text-muted-foreground mb-1">Company</div>
-                  <div>{{ order.customer.company }}</div>
+              <div class="grid grid-cols-2 gap-3">
+                <div v-if="order.customer.email">
+                  <Label class="text-xs text-muted-foreground mb-1 block">Email</Label>
+                  <a :href="`mailto:${order.customer.email}`" class="text-sm text-primary hover:underline">
+                    {{ order.customer.email }}
+                  </a>
                 </div>
                 <div v-if="order.customer.phone">
-                  <div class="text-xs text-muted-foreground mb-1">Phone</div>
-                  <div>{{ order.customer.phone }}</div>
+                  <Label class="text-xs text-muted-foreground mb-1 block">Phone</Label>
+                  <a :href="`tel:${order.customer.phone}`" class="text-sm text-primary hover:underline">
+                    {{ order.customer.phone }}
+                  </a>
                 </div>
               </div>
 
-              <div class="grid grid-cols-2 gap-4 pt-2 border-t">
-                <div>
-                  <div class="text-xs text-muted-foreground mb-1">Order Source</div>
-                  <Badge variant="secondary" class="text-xs">{{ order.source }}</Badge>
+              <!-- Order Info -->
+              <div class="border-t pt-3">
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label class="text-xs text-muted-foreground mb-1 block">Source</Label>
+                    <Badge variant="outline" class="text-xs">
+                      {{ formatSource(order.source) }}
+                    </Badge>
+                  </div>
+                  <div>
+                    <Label class="text-xs text-muted-foreground mb-1 block">Delivery Method</Label>
+                    <Badge variant="secondary" class="text-xs">
+                      {{ order.delivery_method === 'delivery' ? 'Delivery' : 'Customer Pickup' }}
+                    </Badge>
+                  </div>
                 </div>
-                <div>
-                  <div class="text-xs text-muted-foreground mb-1">Delivery Method</div>
-                  <Badge variant="secondary" class="text-xs">{{ order.delivery_method }}</Badge>
-                </div>
+              </div>
+
+              <div>
+                <Label class="text-xs text-muted-foreground mb-1 block">Created</Label>
+                <div class="text-sm">{{ formatDate(order.created_at) }}</div>
               </div>
             </div>
           </CardContent>
@@ -312,55 +351,52 @@ const formatFileType = (type: string): string => {
         <!-- Section 3: Files -->
         <Card>
           <CardContent class="pt-6">
-            <div class="flex items-center gap-2 mb-4">
-              <Paperclip class="h-4 w-4 text-muted-foreground" />
-              <h3 class="font-medium">Files</h3>
-              <span class="text-sm text-muted-foreground">({{ files.length }})</span>
-            </div>
+            <h3 class="text-lg font-medium mb-4 flex items-center gap-2">
+              <div class="p-2 bg-accent rounded-lg">
+                <Paperclip class="h-4 w-4" />
+              </div>
+              Files
+              <Badge variant="secondary" class="text-xs ml-1">{{ files.length }}</Badge>
+            </h3>
 
             <div v-if="files.length === 0" class="text-sm text-muted-foreground text-center py-4">
-              No files attached to this item
+              No files attached
             </div>
 
             <div v-else class="space-y-2">
               <div
                 v-for="file in files"
                 :key="file.id"
-                class="flex items-center justify-between p-3 rounded-md border hover:bg-accent/50 transition-colors"
+                class="flex items-center justify-between p-2 rounded border hover:bg-accent/50 transition-colors"
               >
                 <div class="flex items-center gap-3 flex-1 min-w-0">
-                  <FileText class="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                  <div class="flex-1 min-w-0">
+                  <Paperclip class="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <div class="min-w-0 flex-1">
                     <div class="text-sm font-medium truncate">{{ file.name }}</div>
                     <div class="text-xs text-muted-foreground">
-                      {{ file.size }} • Uploaded {{ formatDate(file.uploaded_at) }}
+                      {{ file.size }} • {{ formatDate(file.uploaded_at) }}
                     </div>
                   </div>
                 </div>
-                <Badge variant="secondary" class="text-xs ml-2">{{ formatFileType(file.type) }}</Badge>
+                <Badge variant="outline" class="text-xs ml-2 flex-shrink-0">
+                  {{ file.type }}
+                </Badge>
               </div>
             </div>
           </CardContent>
         </Card>
 
         <!-- Section 4: Notes -->
-        <Card>
-          <CardContent class="pt-6">
-            <NotesSection
-              :notes="notes"
-              :item-options="itemOptions"
-              :department-options="departmentOptions"
-              @add-note="handleAddNote"
-              @edit-note="handleEditNote"
-              @delete-note="handleDeleteNote"
-            />
-          </CardContent>
-        </Card>
+        <NotesSection
+          :notes="mockNotes"
+          :item-options="noteItemOptions"
+          :department-options="noteDepartmentOptions"
+          :readonly="false"
+          @add-note="handleAddNote"
+          @edit-note="handleEditNote"
+          @delete-note="handleDeleteNote"
+        />
       </div>
-    </div>
-
-    <div v-else class="flex h-full items-center justify-center text-muted-foreground">
-      <p>No item selected</p>
     </div>
   </Sheet>
 </template>

@@ -1,27 +1,32 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useOrders } from '@/composables/useOrders'
 import { usePrintshops } from '@/composables/usePrintshops'
 import { useOrderStore } from '@/stores/orders'
 import { useActivityStore } from '@/stores/activities'
 import { useAuthStore } from '@/stores/auth'
+import { useDriverStore } from '@/stores/drivers'
+import type { RouteStop, DriverRoute } from '@/stores/drivers'
+import { generateRoute, recalculateRoute } from '@/lib/route-service'
+import type { RouteInput, RouteStopInput } from '@/lib/route-service'
 import { useToast } from '@/composables/useToast'
-import type { OrderItem, ItemStatus, Printshop, Customer } from '@/types'
-import type { OrderWithDetails } from '@/composables/useOrders'
-import type { OrderItemWithDetails } from '@/composables/useOrderItems'
+import type { ItemStatus } from '@/types'
 import { driverStatusOptions } from '@/lib/constants'
-import { formatDistanceToNow } from 'date-fns'
 import { formatStatus, formatSource } from '@/lib/formatters'
 import { getStatusVariant } from '@/lib/variants'
 import DriverItemList from '@/components/DriverItemList.vue'
 import ActivityFeed from '@/components/ActivityFeed.vue'
 import OrderFilters from '@/components/OrderFilters.vue'
 import OrderDetailSheet from '@/components/OrderDetailSheet.vue'
-import StatsCards from '@/components/StatsCards.vue'
+import StartRouteDialog from '@/components/StartRouteDialog.vue'
+import TransferDialog from '@/components/TransferDialog.vue'
+import RouteMap from '@/components/RouteMap.vue'
 import Button from '@/components/ui/Button.vue'
 import Card from '@/components/ui/Card.vue'
 import CardContent from '@/components/ui/CardContent.vue'
 import Label from '@/components/ui/Label.vue'
+import Input from '@/components/ui/Input.vue'
 import Textarea from '@/components/ui/Textarea.vue'
 import Badge from '@/components/ui/Badge.vue'
 import {
@@ -31,48 +36,74 @@ import {
   Truck,
   CheckCircle2,
   Camera,
-  Package,
-  Settings,
   AlertCircle,
   User,
   Phone,
   AlertTriangle,
-  XCircle
+  XCircle,
+  ArrowRightLeft,
+  Loader2,
+  Eye,
+  Plus
 } from 'lucide-vue-next'
 
+const route = useRoute()
+const router = useRouter()
 const orderStore = useOrderStore()
 const activityStore = useActivityStore()
 const authStore = useAuthStore()
+const driverStore = useDriverStore()
 const { updateItemStatus } = useOrders()
 const { getPrintshopById } = usePrintshops()
 const { toast } = useToast()
 
-// Orders eligible for delivery
-// Note: An order is shown if it has at least ONE item that's ready/out_for_delivery
-// When building route stops, we filter to only include those specific items
+// Register driver session on mount
+onMounted(() => {
+  if (authStore.currentUser && authStore.isDriver) {
+    driverStore.registerDriverSession(authStore.currentUser.id)
+  }
+})
+
+onUnmounted(() => {
+  // Don't unregister on unmount — only on explicit logout
+})
+
+// Route state from store
+const currentRoute = computed(() => driverStore.currentDriverRoute)
+const routeActive = computed(() => currentRoute.value?.status === 'active')
+const isRouteLoading = ref(false)
+const routeError = ref<string | null>(null)
+
+// Current stop
+const currentStop = computed(() => {
+  if (!currentRoute.value) return null
+  return currentRoute.value.stops[currentRoute.value.currentStopIndex] || null
+})
+
+// Route map ref and summary
+const routeMapRef = ref<InstanceType<typeof RouteMap> | null>(null)
+const routeSummary = computed(() => currentRoute.value?.aiSummary || null)
+
+// Check if all stops are completed (for showing return leg)
+const allStopsCompleted = computed(() => {
+  if (!currentRoute.value) return false
+  return currentRoute.value.stops.every(s => s.status === 'completed' || s.cancelled)
+})
+
+// Orders eligible for delivery — exclude items assigned to other drivers
 const deliverableOrders = computed(() => {
   return orderStore.ordersWithDetails.filter(order => {
     if (order.delivery_method !== 'delivery') return false
     return order.items.some(item =>
-      item.status === 'ready' || item.status === 'out_for_delivery'
+      (item.status === 'ready' || item.status === 'out_for_delivery') &&
+      !driverStore.isItemAssignedToOtherDriver(item.id)
     )
-  })
-})
-
-// Recently delivered orders (last 24h)
-const recentlyDelivered = computed(() => {
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  return orderStore.ordersWithDetails.filter(order => {
-    if (order.delivery_method !== 'delivery') return false
-    return order.items.every(item => item.status === 'delivered') &&
-      order.items.some(item => item.delivery_date && item.delivery_date > oneDayAgo)
   })
 })
 
 // Filters
 const statusFilter = ref<string[]>(['all'])
 const orderBy = ref('newest')
-const searchQuery = ref('')
 
 const filterConfigs = [
   { key: 'status', label: 'Status', options: driverStatusOptions },
@@ -82,38 +113,9 @@ const filterConfigs = [
   ]},
 ]
 
-// Route state
-const selectedOrderIds = ref<Set<string>>(new Set())
-const routeActive = ref(false)
-
-// Route stop interface
-interface RouteStop {
-  id: string
-  type: 'pickup' | 'dropoff'
-  status: 'pending' | 'current' | 'completed'
-  printshop?: Printshop
-  order?: OrderWithDetails
-  customer?: Customer
-  address: string
-  items: OrderItemWithDetails[]
-  note: string
-  photos: string[]
-  hasIssue: boolean
-  cancelled: boolean
-}
-
-const routeStops = ref<RouteStop[]>([])
-const currentStopIndex = ref(0)
-
-const currentStop = computed(() => routeStops.value[currentStopIndex.value])
-
 // Activities filtered to delivery-related
 const filteredActivities = computed(() => {
-  return activityStore.allActivities.filter(a =>
-    a.type === 'delivery' || a.type === 'pickup' ||
-    (a.type === 'status_change' && a.details.to &&
-      ['Out For Delivery', 'Delivered', 'Picked Up'].includes(a.details.to))
-  )
+  return activityStore.getActivitiesForRole()
 })
 
 // Order detail sheet
@@ -125,21 +127,608 @@ const openOrderDetail = (orderId: string) => {
   isSheetOpen.value = true
 }
 
-// Issue reporting modal
+const openItemDetail = (itemId: string) => {
+  const item = orderStore.orderItems.find(i => i.id === itemId)
+  if (item) {
+    selectedOrderId.value = item.order_id
+    isSheetOpen.value = true
+  }
+}
+
+// Watch for openOrder query parameter (from search)
+watch(
+  () => route.query.openOrder,
+  (orderId) => {
+    if (orderId && typeof orderId === 'string') {
+      openOrderDetail(orderId)
+      // Clear the query parameter
+      router.replace({ query: {} })
+    }
+  },
+  { immediate: true }
+)
+
+// Start Route Dialog
+const isStartRouteDialogOpen = ref(false)
+
+const openStartRouteDialog = () => {
+  isStartRouteDialogOpen.value = true
+}
+
+// Build stops from deliverable orders
+function buildStopInputsForOrders(orders: typeof deliverableOrders.value): RouteStopInput[] {
+  const stops: RouteStopInput[] = []
+  const pickupMap = new Map<string, RouteStopInput>()
+
+  for (const order of orders) {
+    const deliverableItems = order.items.filter(
+      i => (i.status === 'ready' || i.status === 'out_for_delivery') &&
+           !driverStore.isItemAssignedToOtherDriver(i.id)
+    )
+
+    if (deliverableItems.length === 0) continue
+
+    // Group items by printshop for pickups
+    const itemsByShop = new Map<string, typeof deliverableItems>()
+    for (const item of deliverableItems) {
+      const shopId = item.assigned_printshop || 'in-house'
+      const existing = itemsByShop.get(shopId) || []
+      existing.push(item)
+      itemsByShop.set(shopId, existing)
+    }
+
+    // Create pickup stops (one per printshop, aggregated)
+    for (const [shopId, items] of itemsByShop) {
+      if (!pickupMap.has(shopId)) {
+        const shop = getPrintshopById(shopId)
+        pickupMap.set(shopId, {
+          id: `pickup-${shopId}`,
+          type: 'pickup',
+          address: shop?.address || driverStore.HOME_BASE.address,
+          lat: shop?.lat,
+          lng: shop?.lng,
+          printshopName: shop?.name || 'Unknown',
+          items: [],
+          relatedDeliveryStopIds: [],
+        })
+      }
+      const pickupStop = pickupMap.get(shopId)!
+      pickupStop.items.push(...items.map(i => ({
+        id: i.id,
+        name: i.product_name,
+        quantity: i.quantity,
+      })))
+    }
+
+    // Create delivery stop (one per order)
+    const deliveryStopId = `delivery-${order.id}`
+    const requiresPickups = [...new Set(
+      deliverableItems.map(i => `pickup-${i.assigned_printshop || 'in-house'}`)
+    )]
+
+    stops.push({
+      id: deliveryStopId,
+      type: 'dropoff',
+      address: order.customer.address,
+      lat: order.customer.lat,
+      lng: order.customer.lng,
+      customerName: order.customer.name,
+      customerNotes: order.customer.notes,
+      orderExternalId: order.external_id || undefined,
+      items: deliverableItems.map(i => ({
+        id: i.id,
+        name: i.product_name,
+        quantity: i.quantity,
+      })),
+      dueDate: deliverableItems
+        .map(i => i.due_date)
+        .filter(Boolean)
+        .sort()[0] || null,
+      priority: 'medium',
+      requiresPickupStopIds: requiresPickups,
+    })
+
+    // Link pickups to their deliveries
+    for (const shopId of new Set(deliverableItems.map(i => i.assigned_printshop || 'in-house'))) {
+      const pickup = pickupMap.get(shopId)
+      if (pickup) {
+        pickup.relatedDeliveryStopIds = pickup.relatedDeliveryStopIds || []
+        if (!pickup.relatedDeliveryStopIds.includes(deliveryStopId)) {
+          pickup.relatedDeliveryStopIds.push(deliveryStopId)
+        }
+      }
+    }
+  }
+
+  return [...pickupMap.values(), ...stops]
+}
+
+// Handle route generation
+async function handleStartRoute(shiftEndTime: string, selectedOrderIds: string[]) {
+  if (!authStore.currentUser) return
+  isRouteLoading.value = true
+  routeError.value = null
+
+  try {
+    // Filter deliverable orders to only selected ones
+    const ordersToRoute = deliverableOrders.value.filter(o => selectedOrderIds.includes(o.id))
+
+    if (ordersToRoute.length === 0) {
+      toast({ title: 'No stops selected', description: 'Please select at least one delivery to plan.' })
+      isRouteLoading.value = false
+      return
+    }
+
+    const stopInputs = buildStopInputsForOrders(ordersToRoute)
+
+    if (stopInputs.length === 0) {
+      toast({ title: 'No stops', description: 'No deliveries are available to plan.' })
+      isRouteLoading.value = false
+      return
+    }
+
+    const input: RouteInput = {
+      driverId: authStore.currentUser.id,
+      driverName: authStore.currentUser.name,
+      startAddress: driverStore.HOME_BASE.address,
+      startLat: driverStore.HOME_BASE.lat,
+      startLng: driverStore.HOME_BASE.lng,
+      endAddress: driverStore.HOME_BASE.address,    // Return to HQ
+      endLat: driverStore.HOME_BASE.lat,
+      endLng: driverStore.HOME_BASE.lng,
+      currentTime: new Date().toISOString(),
+      shiftEndTime,
+      stops: stopInputs,
+    }
+
+    const result = await generateRoute(input)
+
+    // Enrich stops with IDs from our data
+    for (const stop of result.stops) {
+      if (stop.type === 'pickup') {
+        const shopId = stop.id.replace('pickup-', '')
+        const shop = getPrintshopById(shopId)
+        stop.printshopId = shopId
+        stop.printshopName = shop?.name
+      } else if (stop.type === 'dropoff') {
+        const orderId = stop.id.replace('delivery-', '')
+        const order = orderStore.getOrderById(orderId)
+        if (order) {
+          stop.orderId = order.id
+          stop.orderExternalId = order.external_id || undefined
+          stop.customerId = order.customer?.id
+          stop.customerName = order.customer?.name
+          stop.customerPhone = order.customer?.phone
+          stop.customerAddress = order.customer?.address
+          stop.customerNotes = order.customer?.notes
+        }
+      }
+    }
+
+    // Create the DriverRoute
+    const driverRoute: DriverRoute = {
+      driverId: authStore.currentUser.id,
+      driverName: authStore.currentUser.name,
+      status: 'active',
+      shiftEndTime,
+      startAddress: driverStore.HOME_BASE.address,
+      startLat: driverStore.HOME_BASE.lat,
+      startLng: driverStore.HOME_BASE.lng,
+      stops: result.stops,
+      currentStopIndex: 0,
+      totalEstimatedMinutes: result.totalMinutes,
+      totalDistanceKm: result.totalDistanceKm,
+      estimatedFinishTime: undefined,
+      stopsOverCapacity: result.stopsOverCapacity,
+      aiSummary: result.summary,
+      returnToHq: result.returnToHq,
+      startedAt: new Date().toISOString(),
+      pendingNewItemIds: [],
+    }
+
+    driverStore.setDriverRoute(authStore.currentUser.id, driverRoute)
+
+    // Mark items as out_for_delivery
+    for (const stop of result.stops) {
+      for (const itemId of stop.itemIds) {
+        const item = orderStore.orderItems.find(i => i.id === itemId)
+        if (item && item.status === 'ready') {
+          updateItemStatus(item.id, 'out_for_delivery')
+        }
+      }
+    }
+
+    isStartRouteDialogOpen.value = false
+    toast({
+      title: 'Route generated! 🚀',
+      description: `${result.stops.length} stops planned. ${result.warnings.length > 0 ? result.warnings[0] : ''}`,
+    })
+
+  } catch (err: any) {
+    console.error('Route generation failed:', err)
+    routeError.value = err.message || 'Failed to generate route'
+    toast({
+      title: 'Route generation failed',
+      description: err.message || 'Please try again.',
+      variant: 'destructive',
+    })
+  } finally {
+    isRouteLoading.value = false
+  }
+}
+
+// Watch for new ready items during active route
+const previousReadyItemIds = ref<Set<string>>(new Set())
+
+watch(
+  () => orderStore.ordersWithDetails,
+  (orders) => {
+    if (!routeActive.value || !currentRoute.value) return
+    if (!authStore.currentUser) return
+
+    // Find all currently ready delivery items
+    const currentReadyIds = new Set<string>()
+    for (const order of orders) {
+      if (order.delivery_method !== 'delivery') continue
+      for (const item of order.items) {
+        if (item.status === 'ready' && !driverStore.isItemAssignedToOtherDriver(item.id)) {
+          currentReadyIds.add(item.id)
+        }
+      }
+    }
+
+    // Find NEW ready items not already in the route
+    const routeItemIds = new Set(
+      currentRoute.value.stops.flatMap(s => s.itemIds)
+    )
+    const newItems = [...currentReadyIds].filter(
+      id => !routeItemIds.has(id) && !previousReadyItemIds.value.has(id)
+    )
+
+    if (newItems.length > 0) {
+      driverStore.addPendingItems(authStore.currentUser.id, newItems)
+    }
+
+    previousReadyItemIds.value = currentReadyIds
+  },
+  { deep: true }
+)
+
+// Handle adding pending items to route (recalculation)
+async function addPendingToRoute() {
+  if (!currentRoute.value || !authStore.currentUser) return
+  isRouteLoading.value = true
+
+  try {
+    const pendingIds = new Set(currentRoute.value.pendingNewItemIds)
+    const newStopInputs: RouteStopInput[] = []
+
+    // Build stop inputs for new items
+    for (const order of orderStore.ordersWithDetails) {
+      if (order.delivery_method !== 'delivery') continue
+      const newItems = order.items.filter(i => pendingIds.has(i.id))
+      if (newItems.length === 0) continue
+
+      // Create delivery stop
+      newStopInputs.push({
+        id: `delivery-${order.id}-new`,
+        type: 'dropoff',
+        address: order.customer.address,
+        lat: order.customer.lat,
+        lng: order.customer.lng,
+        customerName: order.customer.name,
+        items: newItems.map(i => ({ id: i.id, name: i.product_name, quantity: i.quantity })),
+        dueDate: newItems.map(i => i.due_date).filter(Boolean).sort()[0] || null,
+        priority: 'medium',
+      })
+    }
+
+    const result = await recalculateRoute(
+      currentRoute.value,
+      newStopInputs,
+      new Date().toISOString()
+    )
+
+    // Update route
+    const updatedRoute: DriverRoute = {
+      ...currentRoute.value,
+      stops: result.stops,
+      currentStopIndex: result.stops.findIndex(s => s.status === 'current'),
+      totalEstimatedMinutes: result.totalMinutes,
+      totalDistanceKm: result.totalDistanceKm,
+      stopsOverCapacity: result.stopsOverCapacity,
+      aiSummary: result.summary,
+      lastRecalculatedAt: new Date().toISOString(),
+      pendingNewItemIds: [],
+    }
+
+    driverStore.updateDriverRoute(authStore.currentUser.id, updatedRoute)
+    driverStore.clearPendingItems(authStore.currentUser.id)
+
+    toast({ title: 'Route updated', description: `Added ${pendingIds.size} new items to route.` })
+  } catch (err: any) {
+    toast({ title: 'Recalculation failed', description: err.message, variant: 'destructive' })
+  } finally {
+    isRouteLoading.value = false
+  }
+}
+
+// Transfer dialog
+const isTransferDialogOpen = ref(false)
+const transferItemIds = ref<string[]>([])
+const transferItemSummary = ref('')
+
+function openTransferDialog() {
+  if (!currentStop.value) return
+  transferItemIds.value = [...currentStop.value.itemIds]
+  transferItemSummary.value = currentStop.value.itemSummary
+  isTransferDialogOpen.value = true
+}
+
+function handleTransfer(targetDriverId: string) {
+  driverStore.transferItems(transferItemIds.value, targetDriverId)
+  isTransferDialogOpen.value = false
+  toast({ title: 'Items transferred', description: 'Items sent to the other driver.' })
+}
+
+// Add Stop dialog
+const isAddStopDialogOpen = ref(false)
+const selectedOrderIds = ref<string[]>([])
+
+function openAddStopDialog() {
+  selectedOrderIds.value = []
+  isAddStopDialogOpen.value = true
+}
+
+function toggleOrderSelection(orderId: string) {
+  const index = selectedOrderIds.value.indexOf(orderId)
+  if (index > -1) {
+    selectedOrderIds.value.splice(index, 1)
+  } else {
+    selectedOrderIds.value.push(orderId)
+  }
+}
+
+async function handleAddStops() {
+  if (selectedOrderIds.value.length === 0) {
+    toast({ title: 'No orders selected', description: 'Please select at least one delivery to add.' })
+    return
+  }
+
+  if (!currentRoute.value || !authStore.currentUser) return
+  isRouteLoading.value = true
+
+  try {
+    const ordersToAdd = deliverableOrders.value.filter(o => selectedOrderIds.value.includes(o.id))
+    const newStopInputs = buildStopInputsForOrders(ordersToAdd)
+
+    const result = await recalculateRoute(
+      currentRoute.value,
+      newStopInputs,
+      new Date().toISOString()
+    )
+
+    // Update route
+    const updatedRoute: DriverRoute = {
+      ...currentRoute.value,
+      stops: result.stops,
+      currentStopIndex: result.stops.findIndex(s => s.status === 'current'),
+      totalEstimatedMinutes: result.totalMinutes,
+      totalDistanceKm: result.totalDistanceKm,
+      stopsOverCapacity: result.stopsOverCapacity,
+      aiSummary: result.summary,
+      lastRecalculatedAt: new Date().toISOString(),
+    }
+
+    driverStore.updateDriverRoute(authStore.currentUser.id, updatedRoute)
+
+    // Mark items as out_for_delivery
+    for (const stop of newStopInputs) {
+      for (const item of stop.items || []) {
+        const orderItem = orderStore.orderItems.find(i => i.id === item.id)
+        if (orderItem && orderItem.status === 'ready') {
+          updateItemStatus(item.id, 'out_for_delivery')
+        }
+      }
+    }
+
+    isAddStopDialogOpen.value = false
+    selectedOrderIds.value = []
+    toast({
+      title: 'Stops added! 🚀',
+      description: `${selectedOrderIds.value.length} stop${selectedOrderIds.value.length !== 1 ? 's' : ''} added to your route.`
+    })
+  } catch (err: any) {
+    toast({ title: 'Failed to add stops', description: err.message, variant: 'destructive' })
+  } finally {
+    isRouteLoading.value = false
+  }
+}
+
+// Open confirmation modal
+function openConfirmModal(itemId: string) {
+  confirmItemId.value = itemId
+  confirmNote.value = ''
+  confirmPhotos.value = []
+  isConfirmModalOpen.value = true
+}
+
+// Add photo to confirmation
+function addConfirmPhoto() {
+  const photoId = `confirm-photo-${Date.now()}.jpg`
+  confirmPhotos.value.push(photoId)
+  toast({ title: 'Photo added', description: 'Photo will be attached to the confirmation' })
+}
+
+// Remove photo from confirmation
+function removeConfirmPhoto(index: number) {
+  confirmPhotos.value.splice(index, 1)
+}
+
+// Submit confirmation with notes and photos
+function submitConfirmation() {
+  const stop = currentStop.value
+  if (!stop || !confirmItemId.value) return
+
+  const itemId = confirmItemId.value
+  const item = orderStore.orderItems.find(i => i.id === itemId)
+  if (!item) return
+
+  // Add to confirmed items
+  if (!stop.confirmedItemIds.includes(itemId)) {
+    stop.confirmedItemIds.push(itemId)
+  }
+
+  // Create activity note if note or photos provided
+  if (confirmNote.value.trim() || confirmPhotos.value.length > 0) {
+    const order = orderStore.ordersWithDetails.find(o =>
+      o.items.some(i => i.id === itemId)
+    )
+
+    activityStore.addActivity({
+      id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      type: 'note_added',
+      timestamp: new Date().toISOString(),
+      user: authStore.currentUser?.name || 'Driver',
+      seen: false,
+      important: false,
+      item: {
+        id: item.id,
+        name: item.product_name,
+        orderId: item.order_id,
+      },
+      order: order ? {
+        id: order.id,
+        externalId: order.external_id || undefined,
+        customer: stop.customerName || order.customer?.name || 'Unknown',
+      } : undefined,
+      details: {
+        message: `${stop.type === 'pickup' ? 'Pickup' : 'Delivery'} completed${confirmPhotos.value.length > 0 ? ` (${confirmPhotos.value.length} photo${confirmPhotos.value.length !== 1 ? 's' : ''} attached)` : ''}`,
+        note: confirmNote.value.trim() || undefined,
+      },
+    })
+  }
+
+  // If pickup, lock the item
+  if (stop.type === 'pickup') {
+    driverStore.lockItemsAtStop(stop.id)
+  }
+
+  // If dropoff, mark item delivered
+  if (stop.type === 'dropoff') {
+    updateItemStatus(itemId, 'delivered')
+  }
+
+  toast({ title: 'Item confirmed', description: 'Item has been confirmed.' })
+
+  // Close modal and reset
+  isConfirmModalOpen.value = false
+  confirmItemId.value = null
+  confirmNote.value = ''
+  confirmPhotos.value = []
+}
+
+// Unconfirm an item (allow corrections)
+function unconfirmItem(itemId: string) {
+  const stop = currentStop.value
+  if (!stop) return
+
+  // Remove from confirmed items
+  const index = stop.confirmedItemIds.indexOf(itemId)
+  if (index > -1) {
+    stop.confirmedItemIds.splice(index, 1)
+  }
+
+  // Revert status based on stop type
+  if (stop.type === 'dropoff') {
+    updateItemStatus(itemId, 'out_for_delivery')
+  }
+
+  toast({ title: 'Item unconfirmed', description: 'You can now re-confirm or report an issue.' })
+}
+
+// Check if item is confirmed
+function isItemConfirmed(itemId: string): boolean {
+  return currentStop.value?.confirmedItemIds.includes(itemId) || false
+}
+
+// Compute button text based on stop position
+const nextStopButtonText = computed(() => {
+  if (!currentRoute.value) return 'Next Stop'
+
+  const currentIndex = currentRoute.value.currentStopIndex
+
+  // First stop (starting the route)
+  if (currentIndex === 0 && currentStop.value?.status !== 'completed') {
+    return 'Start Route'
+  }
+
+  // Check if this is the last stop before returning to HQ
+  const remainingStops = currentRoute.value.stops.filter(
+    (s, i) => i > currentIndex && s.status !== 'completed' && !s.cancelled
+  )
+
+  // Last stop before ending
+  if (remainingStops.length === 0) {
+    return 'End Route'
+  }
+
+  // Middle stops
+  return 'Next Stop'
+})
+
+// Go to next stop (manual advance)
+function goToNextStop() {
+  if (!currentRoute.value || !authStore.currentUser) return
+
+  const stop = currentStop.value
+  if (!stop) return
+
+  // Mark current stop as completed
+  stop.status = 'completed'
+  stop.completedAt = new Date().toISOString()
+
+  // Find next stop
+  const nextIndex = currentRoute.value.stops.findIndex(
+    (s, i) => i > currentRoute.value!.currentStopIndex && s.status !== 'completed' && !s.cancelled
+  )
+
+  if (nextIndex !== -1) {
+    currentRoute.value.currentStopIndex = nextIndex
+    currentRoute.value.stops[nextIndex]!.status = 'current'
+    toast({ title: 'Moving to next stop', description: 'Ready for the next stop!' })
+  } else {
+    // Route completed
+    currentRoute.value.status = 'completed'
+    currentRoute.value.completedAt = new Date().toISOString()
+    toast({ title: 'Route completed! 🎉', description: 'All stops have been handled.' })
+  }
+}
+
+// Confirmation modal (per item - for adding notes/photos)
+const isConfirmModalOpen = ref(false)
+const confirmItemId = ref<string | null>(null)
+const confirmNote = ref('')
+const confirmPhotos = ref<string[]>([])
+
+// Issue reporting modal (per item)
 const isIssueModalOpen = ref(false)
+const issueItemId = ref<string | null>(null)
 const issueNote = ref('')
 const issueStatus = ref<ItemStatus>('on_hold')
 const issuePhotos = ref<string[]>([])
+const rescheduleDate = ref('')
 
-const openIssueModal = () => {
+const openIssueModal = (itemId: string) => {
+  issueItemId.value = itemId
   issueNote.value = ''
   issueStatus.value = 'on_hold'
   issuePhotos.value = []
+  rescheduleDate.value = ''
   isIssueModalOpen.value = true
 }
 
 const addIssuePhoto = () => {
-  // Mock photo upload - in Phase 2, this will use Supabase Storage
   const photoId = `issue-photo-${Date.now()}.jpg`
   issuePhotos.value.push(photoId)
   toast({ title: 'Photo added', description: 'Photo will be attached to the issue report' })
@@ -149,255 +738,70 @@ const removeIssuePhoto = (index: number) => {
   issuePhotos.value.splice(index, 1)
 }
 
-// Selection handlers
-const toggleSelect = (orderId: string) => {
-  if (selectedOrderIds.value.has(orderId)) {
-    selectedOrderIds.value.delete(orderId)
-  } else {
-    selectedOrderIds.value.add(orderId)
-  }
-}
-
-const selectAll = () => {
-  deliverableOrders.value.forEach(o => selectedOrderIds.value.add(o.id))
-}
-
-const deselectAll = () => {
-  selectedOrderIds.value.clear()
-}
-
-// Build route stops
-const buildRouteStops = () => {
-  const stops: RouteStop[] = []
-  const selectedOrders = [...selectedOrderIds.value]
-    .map(id => orderStore.getOrderById(id))
-    .filter(Boolean) as OrderWithDetails[]
-
-  // Group items by printshop for pickups (only ready/out_for_delivery items)
-  const shopItems = new Map<string, { printshop: Printshop, items: OrderItemWithDetails[] }>()
-  for (const order of selectedOrders) {
-    for (const item of order.items) {
-      // Only include items that are ready or out for delivery
-      if ((item.status === 'ready' || item.status === 'out_for_delivery') && item.assigned_printshop) {
-        const shop = getPrintshopById(item.assigned_printshop)
-        if (shop) {
-          if (!shopItems.has(shop.id)) {
-            shopItems.set(shop.id, { printshop: shop, items: [] })
-          }
-          // Enrich item with order and customer
-          const enrichedItem: OrderItemWithDetails = {
-            ...item,
-            order,
-            customer: order.customer
-          }
-          shopItems.get(shop.id)!.items.push(enrichedItem)
-        }
-      }
-    }
-  }
-
-  // Create pickup stops
-  for (const [, data] of shopItems) {
-    stops.push({
-      id: `pickup-${data.printshop.id}`,
-      type: 'pickup',
-      status: 'pending',
-      printshop: data.printshop,
-      address: data.printshop.address,
-      items: data.items,
-      note: '',
-      photos: [],
-      hasIssue: false,
-      cancelled: false,
-    })
-  }
-
-  // Create dropoff stops (only include ready/out_for_delivery items)
-  for (const order of selectedOrders) {
-    const enrichedItems: OrderItemWithDetails[] = order.items
-      .filter(item => item.status === 'ready' || item.status === 'out_for_delivery')
-      .map(item => ({
-        ...item,
-        order,
-        customer: order.customer
-      }))
-
-    // Only create a dropoff stop if there are deliverable items
-    if (enrichedItems.length > 0) {
-      stops.push({
-        id: `dropoff-${order.id}`,
-        type: 'dropoff',
-        status: 'pending',
-        order,
-        customer: order.customer,
-        address: order.customer.address,
-        items: enrichedItems,
-        note: '',
-        photos: [],
-        hasIssue: false,
-        cancelled: false,
-      })
-    }
-  }
-
-  // Mark first stop as current
-  if (stops.length > 0 && stops[0]) stops[0].status = 'current'
-
-  routeStops.value = stops
-  currentStopIndex.value = 0
-}
-
-// Start route
-const startRoute = () => {
-  if (selectedOrderIds.value.size === 0) return
-
-  buildRouteStops()
-
-  // Mark all items as out_for_delivery
-  for (const orderId of selectedOrderIds.value) {
-    const order = orderStore.getOrderById(orderId)
-    if (order) {
-      order.items.forEach(item => {
-        if (item.status === 'ready') {
-          updateItemStatus(item.id, 'out_for_delivery')
-        }
-      })
-    }
-  }
-
-  routeActive.value = true
-  toast({ title: 'Route started', description: `${selectedOrderIds.value.size} orders on route` })
-}
-
-// Complete current stop
-const completeCurrentStop = () => {
-  const stop = routeStops.value[currentStopIndex.value]
-  if (!stop) return
-
-  stop.status = 'completed'
-
-  if (stop.type === 'dropoff') {
-    // Mark all items as delivered
-    stop.items.forEach(item => {
-      updateItemStatus(item.id, 'delivered')
-    })
-    toast({
-      title: 'Delivery completed',
-      description: `Delivered to ${stop.customer?.name}`
-    })
-  } else {
-    toast({
-      title: 'Pickup completed',
-      description: `Picked up from ${stop.printshop?.name}`
-    })
-  }
-
-  // Auto-advance to next pending stop
-  const nextIndex = routeStops.value.findIndex((s, i) => i > currentStopIndex.value && s.status !== 'completed')
-  if (nextIndex !== -1) {
-    currentStopIndex.value = nextIndex
-    const nextStop = routeStops.value[nextIndex]
-    if (nextStop) {
-      nextStop.status = 'current'
-    }
-  } else {
-    toast({
-      title: 'Route completed! 🎉',
-      description: 'All stops have been completed'
-    })
-  }
-}
-
-// Submit issue report
+// Submit issue report (for single item)
 const submitIssue = () => {
-  const stop = routeStops.value[currentStopIndex.value]
-  if (!stop || !issueNote.value.trim()) return
+  const stop = currentStop.value
+  if (!stop || !issueNote.value.trim() || !issueItemId.value) return
 
-  // 1. Build note with driver context and status label
-  const statusLabels: Record<ItemStatus, string> = {
-    delivered: 'DELIVERED WITH ISSUE',
-    canceled: 'CANCELLED',
-    on_hold: 'ON HOLD',
-    new: 'NEW',
-    assigned: 'ASSIGNED',
-    in_production: 'IN PRODUCTION',
-    ready: 'READY',
-    out_for_delivery: 'OUT FOR DELIVERY',
-    picked_up: 'PICKED UP'
-  }
+  const itemId = issueItemId.value
+  const item = orderStore.orderItems.find(i => i.id === itemId)
+  if (!item) return
 
-  const notePrefix = `[ISSUE - ${stop.type === 'pickup' ? 'PICKUP' : 'DELIVERY'} ${statusLabels[issueStatus.value]}]`
+  const order = orderStore.ordersWithDetails.find(o =>
+    o.items.some(i => i.id === itemId)
+  )
 
-  // 2. Create activity with the note
-  if (stop.items.length > 0) {
-    const firstItem = stop.items[0]
-    if (!firstItem) return
-
-    const order = stop.order || orderStore.ordersWithDetails.find(o =>
-      o.items.some(i => i.id === firstItem.id)
-    )
-
-    // Add as a note_added activity
-    activityStore.addActivity({
-      id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      type: 'note_added',
-      timestamp: new Date().toISOString(),
-      user: authStore.currentUser?.name || 'Driver',
-      seen: false,
-      important: false,
-      item: {
-        id: firstItem.id,
-        name: firstItem.product_name,
-        orderId: firstItem.order_id,
-      },
-      order: order ? {
-        id: order.id,
-        externalId: order.external_id || undefined,
-        customer: stop.customer?.name || order.customer?.name || 'Unknown',
-      } : undefined,
-      details: {
-        message: `${stop.type === 'pickup' ? 'Pickup' : 'Delivery'} issue reported by driver - Status: ${formatStatus(issueStatus.value)}${issuePhotos.value.length > 0 ? ` (${issuePhotos.value.length} photo${issuePhotos.value.length !== 1 ? 's' : ''} attached)` : ''}`,
-        note: issueNote.value.trim(),
-      },
-    })
-  }
-
-  // 3. Attach photos to the stop
-  if (issuePhotos.value.length > 0) {
-    stop.photos.push(...issuePhotos.value)
-  }
-
-  // 4. Set all items at this stop to the selected status
-  stop.items.forEach(item => {
-    updateItemStatus(item.id, issueStatus.value)
+  // Create activity with the note
+  activityStore.addActivity({
+    id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    type: 'note_added',
+    timestamp: new Date().toISOString(),
+    user: authStore.currentUser?.name || 'Driver',
+    seen: false,
+    important: false,
+    item: {
+      id: item.id,
+      name: item.product_name,
+      orderId: item.order_id,
+    },
+    order: order ? {
+      id: order.id,
+      externalId: order.external_id || undefined,
+      customer: stop.customerName || order.customer?.name || 'Unknown',
+    } : undefined,
+    details: {
+      message: `${stop.type === 'pickup' ? 'Pickup' : 'Delivery'} issue reported by driver - Status: ${formatStatus(issueStatus.value)}${issuePhotos.value.length > 0 ? ` (${issuePhotos.value.length} photo${issuePhotos.value.length !== 1 ? 's' : ''} attached)` : ''}${rescheduleDate.value ? ` - Rescheduled for: ${rescheduleDate.value}` : ''}`,
+      note: issueNote.value.trim(),
+    },
   })
 
-  // 5. Mark stop as completed (or cancelled if status is canceled/on_hold)
-  stop.status = 'completed'
-  stop.cancelled = issueStatus.value === 'canceled' || issueStatus.value === 'on_hold'
+  // Set item status
+  updateItemStatus(itemId, issueStatus.value)
 
-  // 6. Show appropriate toast
+  // Mark this item as having an issue
+  stop.hasIssue = true
+
   const statusMessages: Record<ItemStatus, { title: string; description: string; variant?: 'default' | 'destructive' }> = {
     delivered: {
-      title: `${stop.type === 'pickup' ? 'Pickup' : 'Delivery'} completed with issue`,
-      description: 'Items marked as delivered. Issue has been logged.',
+      title: 'Item marked delivered with issue',
+      description: 'Issue has been logged.',
     },
     canceled: {
-      title: `${stop.type === 'pickup' ? 'Pickup' : 'Delivery'} cancelled`,
-      description: 'Items cancelled. Issue has been logged.',
+      title: 'Item cancelled',
+      description: 'Issue has been logged.',
       variant: 'destructive',
     },
     on_hold: {
-      title: `${stop.type === 'pickup' ? 'Pickup' : 'Delivery'} put on hold`,
-      description: 'Items set to on hold. Issue has been logged.',
+      title: 'Item put on hold',
+      description: 'Issue has been logged.',
       variant: 'destructive',
     },
-    new: { title: 'Status updated', description: 'Items set to new' },
-    assigned: { title: 'Status updated', description: 'Items assigned' },
-    in_production: { title: 'Status updated', description: 'Items in production' },
-    ready: { title: 'Status updated', description: 'Items ready' },
-    out_for_delivery: { title: 'Status updated', description: 'Items out for delivery' },
-    picked_up: { title: 'Status updated', description: 'Items picked up' },
+    new: { title: 'Status updated', description: 'Item set to new' },
+    assigned: { title: 'Status updated', description: 'Item assigned' },
+    in_production: { title: 'Status updated', description: 'Item in production' },
+    ready: { title: 'Status updated', description: 'Item ready' },
+    out_for_delivery: { title: 'Status updated', description: 'Item out for delivery' },
+    picked_up: { title: 'Status updated', description: 'Item picked up' },
   }
 
   const message = statusMessages[issueStatus.value]
@@ -407,58 +811,48 @@ const submitIssue = () => {
     variant: message.variant,
   })
 
-  // 7. Auto-advance to next stop
-  const nextIndex = routeStops.value.findIndex((s, i) =>
-    i > currentStopIndex.value && s.status !== 'completed'
-  )
-  if (nextIndex !== -1) {
-    currentStopIndex.value = nextIndex
-    const nextStop = routeStops.value[nextIndex]
-    if (nextStop) {
-      nextStop.status = 'current'
-    }
-  } else if (routeStops.value.every(s => s.status === 'completed')) {
-    toast({ title: 'Route completed! 🎉', description: 'All stops handled' })
-  }
-
-  // 8. Close modal and clear form
   isIssueModalOpen.value = false
+  issueItemId.value = null
   issueNote.value = ''
   issuePhotos.value = []
+  rescheduleDate.value = ''
 }
 
 // Cancel route
 const confirmCancelRoute = () => {
-  const hasCompleted = routeStops.value.some(s => s.status === 'completed')
+  if (!authStore.currentUser || !currentRoute.value) return
+  const hasCompleted = currentRoute.value.stops.some(s => s.status === 'completed')
   if (hasCompleted) {
     if (!confirm('Some stops are already completed. End the route?')) return
   }
-  routeActive.value = false
-  selectedOrderIds.value.clear()
-  routeStops.value = []
-  currentStopIndex.value = 0
+  driverStore.endRoute(authStore.currentUser.id)
 }
 
 // Mock photo upload
 const mockAddPhoto = () => {
-  const stop = routeStops.value[currentStopIndex.value]
+  const stop = currentStop.value
   if (!stop) return
-
   stop.photos.push(`photo-${Date.now()}.jpg`)
   toast({ title: 'Photo added' })
 }
 
 // Jump to stop
 const jumpToStop = (index: number) => {
-  const currentStop = routeStops.value[currentStopIndex.value]
-  if (currentStop?.status === 'current') {
-    currentStop.status = 'pending'
+  if (!currentRoute.value) return
+  const current = currentRoute.value.stops[currentRoute.value.currentStopIndex]
+  if (current?.status === 'current') {
+    current.status = 'pending'
   }
-  currentStopIndex.value = index
-  const newStop = routeStops.value[index]
+  currentRoute.value.currentStopIndex = index
+  const newStop = currentRoute.value.stops[index]
   if (newStop) {
     newStop.status = 'current'
   }
+
+  // Fly map to the new stop
+  nextTick(() => {
+    routeMapRef.value?.flyToStop(index)
+  })
 }
 
 const handleActivityClick = (orderId: string) => {
@@ -478,45 +872,39 @@ const handleToggleImportant = (activityId: string) => {
 <template>
   <!-- QUEUE MODE -->
   <div v-if="!routeActive" class="h-full mr-80 overflow-hidden w-full">
-    <div class="flex h-full flex-col space-y-10 p-10 overflow-hidden">
+    <div class="flex h-full flex-col space-y-10 p-10 overflow-hidden pt-24">
       <!-- Header -->
       <div class="flex items-center justify-between flex-shrink-0">
         <div>
           <h1 class="text-3xl font-medium">Deliveries</h1>
           <p class="text-sm text-muted-foreground">
-            {{ selectedOrderIds.size }} order{{ selectedOrderIds.size !== 1 ? 's' : '' }} selected
+            {{ deliverableOrders.length }} order{{ deliverableOrders.length !== 1 ? 's' : '' }} ready for delivery
           </p>
         </div>
-        <div class="flex gap-3">
-          <Button
-            size="lg"
-            :disabled="selectedOrderIds.size === 0"
-            @click="startRoute"
-            class="gap-2"
-          >
-            <Navigation class="h-4 w-4" />
-            Start Route ({{ selectedOrderIds.size }})
-          </Button>
-        </div>
+        <Button
+          size="lg"
+          :disabled="deliverableOrders.length === 0"
+          @click="openStartRouteDialog"
+          class="gap-2"
+        >
+          <Navigation class="h-4 w-4" />
+          Start Route
+        </Button>
       </div>
 
       <!-- Filters -->
       <OrderFilters
         v-model:status-filter="statusFilter"
         v-model:order-by="orderBy"
-        v-model:search-query="searchQuery"
         :table-filters="filterConfigs"
+        :show-search="false"
       />
 
       <!-- Content -->
       <div class="flex-1 min-h-0 w-full overflow-auto">
         <DriverItemList
           :orders="deliverableOrders"
-          :selected-ids="selectedOrderIds"
-          @toggle-select="toggleSelect"
           @order-click="openOrderDetail"
-          @select-all="selectAll"
-          @deselect-all="deselectAll"
         />
       </div>
     </div>
@@ -533,72 +921,141 @@ const handleToggleImportant = (activityId: string) => {
   </div>
 
   <!-- ROUTE MODE -->
-  <div v-else class="h-full w-full overflow-hidden">
-    <!-- Top Bar -->
-    <div class="flex items-center justify-between border-b p-4 bg-background">
-      <div class="flex items-center gap-3">
-        <Button variant="ghost" size="sm" @click="confirmCancelRoute">
-          <ArrowLeft class="h-4 w-4 mr-1" /> Back
-        </Button>
-        <h2 class="text-lg font-semibold">Route in Progress</h2>
-      </div>
-      <div class="text-sm text-muted-foreground">
-        Stop {{ currentStopIndex + 1 }} of {{ routeStops.length }}
-      </div>
-    </div>
+  <div v-else class="h-full w-full overflow-hidden pt-[4rem]">
 
     <!-- Route Content -->
-    <div class="flex h-[calc(100vh-8rem)]">
+    <div class="flex h-[calc(100vh-4rem)]">
       <!-- Left: Stop Progress List -->
-      <div class="w-72 border-r overflow-y-auto p-4 space-y-2">
+      <div class="w-72 border-r overflow-y-auto p-6 space-y-2">
+        <!-- Pending New Items Banner -->
         <div
-          v-for="(stop, i) in routeStops"
+          v-if="currentRoute?.pendingNewItemIds.length"
+          class="mb-4 p-3 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30"
+        >
+          <div class="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
+            <AlertCircle class="h-4 w-4" />
+            {{ currentRoute.pendingNewItemIds.length }} new item{{ currentRoute.pendingNewItemIds.length !== 1 ? 's' : '' }} available
+          </div>
+          <p class="text-xs text-amber-600 dark:text-amber-500 mt-1">
+            New items are ready for delivery. Add them to recalculate your route.
+          </p>
+          <Button size="sm" variant="outline" class="mt-2 w-full" @click="addPendingToRoute" :disabled="isRouteLoading">
+            <Loader2 v-if="isRouteLoading" class="h-3 w-3 mr-1 animate-spin" />
+            Add to Route
+          </Button>
+        </div>
+
+        <!-- Stop List -->
+        <div
+          v-for="(stop, i) in currentRoute?.stops"
           :key="stop.id"
           @click="jumpToStop(i)"
           :class="[
             'p-3 rounded-lg border cursor-pointer transition-colors',
             stop.status === 'completed' ? 'bg-green-50 dark:bg-green-950/30 border-green-200' :
+            stop.hasIssue && stop.status !== 'completed' ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300' :
             stop.status === 'current' ? 'bg-accent border-primary ring-1 ring-primary' :
             'hover:bg-accent/50'
+          ]"
+        >
+          <div class="flex items-start gap-3">
+
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium flex items-center gap-1 pb-1.5">
+                <MapPin v-if="stop.type === 'pickup'" class="h-3 w-3 text-blue-500" />
+                <Truck v-else class="h-3 w-3 text-green-500" />
+                {{ stop.type === 'pickup' ? `Pickup: ${stop.printshopName}` : `Deliver: ${stop.customerName}` }}
+                <AlertTriangle v-if="stop.hasIssue && stop.status !== 'completed'" class="h-3 w-3 text-amber-500 flex-shrink-0" />
+                <AlertCircle v-if="!stop.fitsInShift" class="h-3 w-3 text-red-500 flex-shrink-0" title="May not fit in shift" />
+              </div>
+              <div class="text-xs text-muted-foreground truncate">{{ stop.address }}</div>
+              <div class="text-xs text-muted-foreground">{{ stop.itemIds.length }} item(s)</div>
+              <div v-if="stop.travelMinutesFromPrevious != null && stop.distanceKmFromPrevious != null" class="text-xs text-muted-foreground">
+                {{ stop.travelMinutesFromPrevious }} min · {{ stop.distanceKmFromPrevious.toFixed(1) }} km
+              </div>
+              <div v-if="stop.estimatedArrival" class="text-xs text-blue-600 dark:text-blue-400">
+                ETA: {{ stop.estimatedArrival }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add Stop Button -->
+        <Button
+          variant="outline"
+          size="sm"
+          class="w-full gap-2"
+          @click="openAddStopDialog"
+        >
+          <Plus class="h-4 w-4" />
+          Add a Stop
+        </Button>
+
+        <!-- Return to HQ Card -->
+        <div
+          v-if="currentRoute?.returnToHq"
+          :class="[
+            'p-3 rounded-lg border transition-colors',
+            allStopsCompleted ? 'bg-green-50 dark:bg-green-950/30 border-green-200' : 'bg-muted/50 border-dashed'
           ]"
         >
           <div class="flex items-center gap-3">
             <div :class="[
               'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold',
-              stop.cancelled ? 'bg-destructive text-destructive-foreground' :
-              stop.status === 'completed' ? 'bg-green-500 text-white' :
-              stop.status === 'current' ? 'bg-primary text-primary-foreground' :
-              'bg-muted text-muted-foreground'
+              allStopsCompleted ? 'bg-green-500 text-white' : 'bg-muted text-muted-foreground'
             ]">
-              <XCircle v-if="stop.cancelled" class="h-4 w-4" />
-              <CheckCircle2 v-else-if="stop.status === 'completed'" class="h-4 w-4" />
-              <span v-else>{{ i + 1 }}</span>
+              <CheckCircle2 v-if="allStopsCompleted" class="h-4 w-4" />
+              <span v-else>🏠</span>
             </div>
             <div class="flex-1 min-w-0">
-              <div class="text-sm font-medium flex items-center gap-1">
-                <MapPin v-if="stop.type === 'pickup'" class="h-3 w-3 text-blue-500" />
-                <Truck v-else class="h-3 w-3 text-green-500" />
-                {{ stop.type === 'pickup' ? `Pickup: ${stop.printshop?.name}` : `Deliver: ${stop.customer?.name}` }}
-                <AlertTriangle v-if="stop.hasIssue && stop.status !== 'completed'" class="h-3 w-3 text-amber-500 flex-shrink-0" />
+              <div class="text-sm font-medium">Return to HQ</div>
+              <div class="text-xs text-muted-foreground truncate">{{ driverStore.HOME_BASE.address }}</div>
+              <div class="text-xs text-blue-600 dark:text-blue-400">
+                {{ currentRoute.returnToHq.travelMinutes }} min · {{ currentRoute.returnToHq.distanceKm.toFixed(1) }} km
               </div>
-              <div class="text-xs text-muted-foreground truncate">{{ stop.address }}</div>
-              <div class="text-xs text-muted-foreground">{{ stop.items.length }} item(s)</div>
+              <div v-if="currentRoute.returnToHq.estimatedArrival" class="text-xs text-blue-600 dark:text-blue-400">
+                ETA: {{ currentRoute.returnToHq.estimatedArrival }}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Right: Current Stop Detail -->
-      <div v-if="currentStop" class="flex-1 p-6 overflow-y-auto space-y-6">
-        <!-- Stop Header -->
+      <!-- Right: Map and Details Side-by-Side -->
+      <div class="flex-1 flex">
+
+        <!-- Left: Map Section -->
+        <div class="w-1/2 p-6">
+          <div class="h-full rounded-lg overflow-hidden">
+            <RouteMap
+              ref="routeMapRef"
+              :stops="currentRoute?.stops || []"
+              :current-stop-index="currentRoute?.currentStopIndex || 0"
+              :start-address="driverStore.HOME_BASE.address"
+              :start-lat="driverStore.HOME_BASE.lat"
+              :start-lng="driverStore.HOME_BASE.lng"
+              :return-to-hq-data="currentRoute?.returnToHq"
+              @stop-click="jumpToStop"
+            />
+          </div>
+        </div>
+
+        <!-- Right: Current Stop Detail -->
+        <div class="w-1/2 overflow-y-auto p-6 border-l">
+          <div v-if="currentStop" class="space-y-6">
+          <!-- Stop Header -->
         <div>
-          <Badge :variant="currentStop.type === 'pickup' ? 'default' : 'secondary'" class="mb-2">
-            {{ currentStop.type === 'pickup' ? 'PICKUP' : 'DELIVERY' }}
+          <Badge
+            :variant="currentStop.type === 'pickup' ? 'default' : 'secondary'"
+            :class="currentStop.type === 'pickup'
+              ? 'mb-2 bg-green-100 dark:bg-green-950 border-green-500 text-green-700 dark:text-green-400'
+              : 'mb-2 bg-blue-100 dark:bg-blue-950 border-blue-500 text-blue-700 dark:text-blue-400'"
+          >
+            {{ currentStop.type === 'pickup' ? 'Pickup' : 'Delivery' }}
           </Badge>
           <h2 class="text-2xl font-bold mb-1">
-            {{ currentStop.type === 'pickup' ? currentStop.printshop?.name : currentStop.customer?.name }}
+            {{ currentStop.type === 'pickup' ? currentStop.printshopName : currentStop.customerName }}
           </h2>
-          <p class="text-muted-foreground mb-2">{{ currentStop.address }}</p>
         </div>
 
         <!-- Issue Banner -->
@@ -608,7 +1065,7 @@ const handleToggleImportant = (activityId: string) => {
         </div>
 
         <!-- Customer Info (dropoff only) -->
-        <Card v-if="currentStop.type === 'dropoff' && currentStop.customer">
+        <Card v-if="currentStop.type === 'dropoff' && currentStop.customerName">
           <CardContent class="p-4 space-y-3">
             <h3 class="text-sm font-semibold flex items-center gap-2">
               <User class="h-4 w-4" />
@@ -617,119 +1074,224 @@ const handleToggleImportant = (activityId: string) => {
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <Label class="text-xs text-muted-foreground mb-1 block">Name</Label>
-                <div class="text-sm font-medium">{{ currentStop.customer.name }}</div>
-                <div v-if="currentStop.customer.company" class="text-xs text-muted-foreground">
-                  {{ currentStop.customer.company }}
-                </div>
+                <div class="text-sm font-medium">{{ currentStop.customerName }}</div>
               </div>
-              <div>
+              <div v-if="currentStop.customerPhone">
                 <Label class="text-xs text-muted-foreground mb-1 block">Contact</Label>
-                <a :href="`tel:${currentStop.customer.phone}`" class="text-sm text-primary hover:underline flex items-center gap-1">
+                <a :href="`tel:${currentStop.customerPhone}`" class="text-sm text-primary hover:underline flex items-center gap-1">
                   <Phone class="h-3 w-3" />
-                  {{ currentStop.customer.phone }}
-                </a>
-                <a :href="`mailto:${currentStop.customer.email}`" class="text-xs text-muted-foreground hover:underline">
-                  {{ currentStop.customer.email }}
+                  {{ currentStop.customerPhone }}
                 </a>
               </div>
               <div class="col-span-2">
                 <Label class="text-xs text-muted-foreground mb-1 block">Delivery Address</Label>
-                <div class="text-sm">{{ currentStop.customer.address }}</div>
+                <div class="text-sm">{{ currentStop.customerAddress }}</div>
               </div>
-              <div v-if="currentStop.customer.notes" class="col-span-2 border-t pt-3">
+              <div v-if="currentStop.customerNotes" class="col-span-2 border-t pt-3">
                 <Label class="text-xs text-muted-foreground mb-1 block">Customer Notes</Label>
-                <div class="text-sm text-muted-foreground italic">{{ currentStop.customer.notes }}</div>
+                <div class="text-sm text-muted-foreground italic">{{ currentStop.customerNotes }}</div>
               </div>
             </div>
-            <div v-if="currentStop.order" class="flex items-center gap-3 text-sm pt-2 border-t">
-              <span class="font-medium">Order #{{ currentStop.order.external_id || currentStop.order.id.slice(0, 8) }}</span>
-              <Badge variant="outline">{{ formatSource(currentStop.order.source) }}</Badge>
+            <div v-if="currentStop.orderExternalId" class="flex items-center gap-3 text-sm pt-2 border-t">
+              <span class="font-medium">Order #{{ currentStop.orderExternalId }}</span>
               <Badge variant="default">Delivery</Badge>
             </div>
           </CardContent>
         </Card>
 
         <!-- Pickup Location Info (pickup only) -->
-        <Card v-if="currentStop.type === 'pickup' && currentStop.printshop">
-          <CardContent class="p-4 space-y-3">
-            <h3 class="text-sm font-semibold flex items-center gap-2">
+        <Card v-if="currentStop.type === 'pickup' && currentStop.printshopName">
+          <CardContent class="p-4">
+            <h3 class="text-sm font-semibold flex items-center gap-2 pb-4">
               <MapPin class="h-4 w-4" />
               Pickup Location
             </h3>
-            <div class="text-sm font-medium">{{ currentStop.printshop.name }}</div>
-            <div class="text-sm text-muted-foreground">{{ currentStop.printshop.address }}</div>
+            <div class="text-sm font-medium">{{ currentStop.printshopName }}</div>
+            <div class="text-sm text-muted-foreground">{{ currentStop.address }}</div>
           </CardContent>
         </Card>
 
-        <!-- Items at this Stop -->
+        <!-- Items at this Stop (with per-item controls) -->
         <Card>
           <CardContent class="p-0">
             <div
-              v-for="item in currentStop.items"
-              :key="item.id"
-              class="flex items-center justify-between p-4 border-b last:border-0"
+              v-for="itemId in currentStop.itemIds"
+              :key="itemId"
+              class="p-4 flex justify-start border-b last:border-0 flex gap-4"
             >
-              <div>
-                <div class="text-sm font-medium">{{ item.product_name }}</div>
-                <div class="text-xs text-muted-foreground">Qty: {{ item.quantity }}</div>
+
+                            <Badge
+                  :variant="isItemConfirmed(itemId) ? 'default' : 'outline'"
+                  :class="isItemConfirmed(itemId)
+                    ? 'bg-green-300/30 border-green-500 text-green-600'
+                    : currentStop.type === 'pickup'
+                      ? 'bg-green-100 dark:bg-green-950 border-green-500 text-green-700 dark:text-green-400'
+                      : 'bg-blue-100 dark:bg-blue-950 border-blue-500 text-blue-700 dark:text-blue-400'"
+                >
+                  {{ isItemConfirmed(itemId) ? '✓ Confirmed' : currentStop.type === 'pickup' ? 'Pickup' : 'Delivery' }}
+                </Badge>
+
+
+              <!-- Item Info -->
+              <div class="flex flex-col items-start justify-between">
+                  <div class="text-sm font-medium">{{ orderStore.orderItems.find(i => i.id === itemId)?.product_name || 'Unknown' }}</div>
+                  <div class="text-xs text-muted-foreground">Qty: {{ orderStore.orderItems.find(i => i.id === itemId)?.quantity || 0 }}</div>
               </div>
-              <Badge :variant="getStatusVariant(item.status)">{{ formatStatus(item.status) }}</Badge>
+
+              <!-- Per-item Action Buttons -->
+              <div class="flex gap-2 ml-auto">
+                <template v-if="!isItemConfirmed(itemId)">
+                  <Button variant="outline" class="flex-1 gap-1" @click="openItemDetail(itemId)">
+                    <Eye class="h-3.5 w-3.5" />
+                    Details
+                  </Button>
+                  <Button variant="outline" class="flex-1 gap-1 text-destructive border-destructive/30 hover:text-destructive hover:border-destructive/50 hover:bg-destructive/10" @click="openIssueModal(itemId)">
+                    <AlertTriangle class="h-3.5 w-3.5" />
+                    Issue
+                  </Button>
+                  <Button class="flex-1 gap-1" @click="openConfirmModal(itemId)">
+                    <CheckCircle2 class="h-3.5 w-3.5" />
+                    Confirm
+                  </Button>
+                </template>
+                <template v-else>
+                  <Button variant="outline" class="flex-1 gap-1" @click="openItemDetail(itemId)">
+                    <Eye class="h-3.5 w-3.5" />
+                    Details
+                  </Button>
+                  <Button variant="outline" class="flex-1 gap-1" @click="unconfirmItem(itemId)">
+                    <XCircle class="h-3.5 w-3.5" />
+                    Unconfirm
+                  </Button>
+                </template>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        <!-- Driver Note -->
+        <!-- Transfer & Next Stop Actions -->
+        <div class="bg-background pt-4 space-y-3">
+          <!-- Transfer Button -->
+          <Button
+            v-if="driverStore.otherActiveDrivers.length > 0 && currentStop.status !== 'completed'"
+            variant="outline"
+            size="lg"
+            class="w-full gap-2"
+            @click="openTransferDialog"
+          >
+            <ArrowRightLeft class="h-4 w-4" />
+            Transfer to Driver
+          </Button>
+          <!-- Next Stop Button -->
+          <Button
+            v-if="currentStop.status !== 'completed'"
+            variant="default"
+            size="lg"
+            class="w-full gap-2"
+            @click="goToNextStop"
+          >
+            <Navigation class="h-5 w-5" />
+            {{ nextStopButtonText }}
+          </Button>
+        </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation Modal (per item) -->
+  <Teleport to="body">
+    <div v-if="isConfirmModalOpen && currentStop" class="fixed inset-0 z-[100] flex items-center justify-center">
+      <!-- Backdrop -->
+      <div class="absolute inset-0 bg-black/50" @click="isConfirmModalOpen = false" />
+
+      <!-- Modal -->
+      <div class="relative bg-background rounded-lg border shadow-xl w-full max-w-md mx-4 p-6 space-y-5">
         <div>
-          <Label class="text-sm font-medium mb-2 block">Add Note</Label>
+          <h2 class="text-lg font-semibold flex items-center gap-2">
+            <CheckCircle2 class="h-5 w-5 text-green-600" />
+            Confirm {{ currentStop.type === 'pickup' ? 'Pickup' : 'Delivery' }}
+          </h2>
+          <p class="text-sm font-medium mt-1">
+            {{ confirmItemId ? orderStore.orderItems.find(i => i.id === confirmItemId)?.product_name : 'Unknown Item' }}
+          </p>
+          <p class="text-xs text-muted-foreground mt-0.5">
+            {{ currentStop.type === 'pickup'
+              ? `At ${currentStop.printshopName}`
+              : `To ${currentStop.customerName}` }}
+          </p>
+        </div>
+
+        <!-- Note (optional) -->
+        <div>
+          <Label class="text-sm font-medium mb-2 block">
+            Add Note (Optional)
+          </Label>
           <Textarea
-            v-model="currentStop.note"
-            placeholder="Any issues, customer instructions, access codes..."
-            :rows="3"
+            v-model="confirmNote"
+            placeholder="Any additional notes: customer instructions, access codes, special requests..."
+            :rows="4"
+            class="w-full"
           />
         </div>
 
         <!-- Photo Upload -->
         <div>
-          <Label class="text-sm font-medium mb-2 block">Photos</Label>
-          <div class="border-2 border-dashed rounded-lg p-8 text-center">
-            <Camera class="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-            <p class="text-sm text-muted-foreground">Photo upload coming in Phase 2</p>
-            <Button variant="outline" size="sm" class="mt-3" @click="mockAddPhoto">
-              Simulate Photo
-            </Button>
-          </div>
-          <div v-if="currentStop.photos.length" class="flex gap-2 mt-3">
+          <Label class="text-sm font-medium mb-2 block">Photos (Optional)</Label>
+          <Button
+            variant="outline"
+            size="sm"
+            class="w-full gap-2"
+            type="button"
+            @click="addConfirmPhoto"
+          >
+            <Camera class="h-4 w-4" />
+            Add Photo
+          </Button>
+          <div v-if="confirmPhotos.length > 0" class="flex flex-wrap gap-2 mt-3">
             <div
-              v-for="(photo, i) in currentStop.photos"
+              v-for="(photo, i) in confirmPhotos"
               :key="i"
-              class="w-20 h-20 bg-muted rounded-lg flex items-center justify-center text-xs text-muted-foreground"
+              class="relative w-20 h-20 bg-muted rounded-lg flex items-center justify-center text-xs text-muted-foreground group"
             >
-              📷 Photo {{ i + 1 }}
+              <div class="text-center">
+                📷
+                <div class="text-[10px]">Photo {{ i + 1 }}</div>
+              </div>
+              <button
+                @click="removeConfirmPhoto(i)"
+                class="absolute -top-2 -right-2 w-6 h-6 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                type="button"
+                title="Remove photo"
+              >
+                ×
+              </button>
             </div>
           </div>
+          <p class="text-xs text-muted-foreground mt-2">
+            Photo capture will be available in Phase 2. This is a simulation.
+          </p>
         </div>
 
-        <!-- Complete Stop Button -->
-        <div class="sticky bottom-0 bg-background pt-4 border-t space-y-3">
-          <template v-if="currentStop.status !== 'completed'">
-            <!-- Primary action -->
-            <Button size="lg" class="w-full gap-2" @click="completeCurrentStop">
-              <CheckCircle2 class="h-5 w-5" />
-              {{ currentStop.type === 'pickup' ? 'Confirm Pickup' : 'Confirm Delivery' }}
-            </Button>
-            <!-- Report Issue -->
-            <Button variant="outline" size="lg" class="w-full gap-2 text-destructive border-destructive/30 hover:bg-destructive/10" @click="openIssueModal">
-              <AlertTriangle class="h-5 w-5" />
-              Report Issue
-            </Button>
-          </template>
-          <div v-else class="text-center text-green-600 font-medium py-3">
-            ✓ Stop completed
-          </div>
+        <!-- Modal Actions -->
+        <div class="flex gap-3 pt-2">
+          <Button variant="outline" class="flex-1" @click="isConfirmModalOpen = false">
+            Cancel
+          </Button>
+          <Button
+            variant="default"
+            class="flex-1 bg-green-600 hover:bg-green-700"
+            @click="submitConfirmation"
+          >
+            <CheckCircle2 class="h-4 w-4 mr-2" />
+            Confirm
+          </Button>
         </div>
       </div>
     </div>
-  </div>
+  </Teleport>
 
   <!-- Report Issue Modal -->
   <Teleport to="body">
@@ -742,12 +1304,15 @@ const handleToggleImportant = (activityId: string) => {
         <div>
           <h2 class="text-lg font-semibold flex items-center gap-2">
             <AlertTriangle class="h-5 w-5 text-destructive" />
-            Report Issue
+            Report Issue for Item
           </h2>
           <p class="text-sm text-muted-foreground mt-1">
+            <strong>{{ issueItemId ? orderStore.orderItems.find(i => i.id === issueItemId)?.product_name : 'Unknown Item' }}</strong>
+          </p>
+          <p class="text-xs text-muted-foreground mt-0.5">
             {{ currentStop.type === 'pickup'
-              ? `Report an issue with pickup at ${currentStop.printshop?.name}`
-              : `Report an issue with delivery to ${currentStop.customer?.name}` }}
+              ? `Pickup at ${currentStop.printshopName}`
+              : `Delivery to ${currentStop.customerName}` }}
           </p>
         </div>
 
@@ -816,6 +1381,21 @@ const handleToggleImportant = (activityId: string) => {
           />
         </div>
 
+        <!-- Reschedule Date (optional) -->
+        <div v-if="issueStatus === 'on_hold' || issueStatus === 'canceled'">
+          <Label class="text-sm font-medium mb-2 block">Reschedule Date (Optional)</Label>
+          <Input
+            type="date"
+            v-model="rescheduleDate"
+            class="w-full"
+          />
+          <p class="text-xs text-muted-foreground mt-1">
+            {{ issueStatus === 'canceled'
+              ? 'Set a new date for rescheduled delivery/pickup'
+              : 'Set a new date for retry attempt' }}
+          </p>
+        </div>
+
         <!-- Photo Upload -->
         <div>
           <Label class="text-sm font-medium mb-2 block">Photos (Optional)</Label>
@@ -868,6 +1448,130 @@ const handleToggleImportant = (activityId: string) => {
             {{ issueStatus === 'delivered' ? 'Mark as Delivered' :
                issueStatus === 'canceled' ? 'Cancel & Continue' :
                'Put On Hold & Continue' }}
+          </Button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Start Route Dialog -->
+  <StartRouteDialog
+    :is-open="isStartRouteDialogOpen"
+    :is-loading="isRouteLoading"
+    :deliverable-orders="deliverableOrders"
+    @update:is-open="isStartRouteDialogOpen = $event"
+    @confirm="handleStartRoute"
+  />
+
+  <!-- Transfer Dialog -->
+  <TransferDialog
+    :is-open="isTransferDialogOpen"
+    :item-ids="transferItemIds"
+    :item-summary="transferItemSummary"
+    :active-drivers="driverStore.otherActiveDrivers"
+    @update:is-open="isTransferDialogOpen = $event"
+    @confirm="handleTransfer"
+  />
+
+  <!-- Add Stop Dialog -->
+  <Teleport to="body">
+    <div v-if="isAddStopDialogOpen" class="fixed inset-0 z-[100] flex items-center justify-center">
+      <!-- Backdrop -->
+      <div class="absolute inset-0 bg-black/50" @click="isAddStopDialogOpen = false" />
+
+      <!-- Modal -->
+      <div class="relative bg-background rounded-lg border shadow-xl w-full max-w-2xl mx-4 p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+        <div>
+          <h2 class="text-lg font-semibold flex items-center gap-2">
+            <Plus class="h-5 w-5" />
+            Add a Stop to Your Route
+          </h2>
+          <p class="text-sm text-muted-foreground mt-1">
+            Add an available order or create a custom stop
+          </p>
+        </div>
+
+        <!-- Available Orders/Items -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold">Available Deliveries</h3>
+            <span v-if="selectedOrderIds.length > 0" class="text-xs text-muted-foreground">
+              {{ selectedOrderIds.length }} selected
+            </span>
+          </div>
+          <div class="space-y-2 max-h-60 overflow-y-auto">
+            <div
+              v-for="order in deliverableOrders"
+              :key="order.id"
+              :class="[
+                'p-3 rounded-lg border cursor-pointer transition-colors flex items-start gap-3',
+                selectedOrderIds.includes(order.id)
+                  ? 'bg-primary/10 border-primary ring-1 ring-primary'
+                  : 'hover:bg-accent'
+              ]"
+              @click="toggleOrderSelection(order.id)"
+            >
+              <input
+                type="checkbox"
+                :checked="selectedOrderIds.includes(order.id)"
+                class="mt-0.5 h-4 w-4 rounded border-gray-300"
+                @click.stop="toggleOrderSelection(order.id)"
+              />
+              <div class="flex-1 min-w-0">
+                <div class="font-medium text-sm">#{{ order.external_id || order.id.slice(0, 8) }}</div>
+                <div class="text-xs text-muted-foreground">{{ order.customer.name }} • {{ order.items.length }} item(s)</div>
+                <div class="text-xs text-muted-foreground truncate">{{ order.customer.address }}</div>
+              </div>
+            </div>
+            <div v-if="deliverableOrders.length === 0" class="text-center py-8 text-sm text-muted-foreground">
+              No available deliveries
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t pt-4">
+          <h3 class="text-sm font-semibold mb-3">Or Create Custom Stop</h3>
+          <div class="space-y-3">
+            <div>
+              <Label class="text-sm">Stop Type</Label>
+              <div class="flex gap-2 mt-2">
+                <Button variant="outline" class="flex-1" size="sm">
+                  <MapPin class="h-3.5 w-3.5 mr-1" />
+                  Pickup
+                </Button>
+                <Button variant="outline" class="flex-1" size="sm">
+                  <Truck class="h-3.5 w-3.5 mr-1" />
+                  Delivery
+                </Button>
+              </div>
+            </div>
+            <div>
+              <Label class="text-sm">Address</Label>
+              <Input placeholder="Enter address..." class="mt-1" />
+            </div>
+            <div>
+              <Label class="text-sm">Notes (Optional)</Label>
+              <Textarea placeholder="Additional details..." :rows="2" class="mt-1" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Actions -->
+        <div class="flex gap-3 pt-2 border-t">
+          <Button variant="outline" class="flex-1" @click="isAddStopDialogOpen = false">
+            Cancel
+          </Button>
+          <Button
+            variant="default"
+            class="flex-1"
+            :disabled="selectedOrderIds.length === 0 || isRouteLoading"
+            @click="handleAddStops"
+          >
+            <Loader2 v-if="isRouteLoading" class="h-4 w-4 mr-2 animate-spin" />
+            <Plus v-else class="h-4 w-4 mr-2" />
+            {{ selectedOrderIds.length === 0
+              ? 'Select Deliveries'
+              : `Add ${selectedOrderIds.length} Stop${selectedOrderIds.length !== 1 ? 's' : ''}` }}
           </Button>
         </div>
       </div>

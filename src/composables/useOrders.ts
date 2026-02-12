@@ -14,6 +14,7 @@ export function useOrders() {
   return {
     getOrders: () => store.ordersWithDetails,
     getOrderById: (id: string) => store.getOrderById(id),
+    getOrdersByCustomerId: (customerId: string) => store.getOrdersByCustomerId(customerId),
     updateItemStatus: (itemId: string, newStatus: any) => store.updateItemStatus(itemId, newStatus),
     updateOrderItemsStatus: (orderId: string, newStatus: any) => store.updateOrderItemsStatus(orderId, newStatus),
     updatePrintshopItemsStatus: (printshopId: string, orderIds: string[], newStatus: any) =>

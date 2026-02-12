@@ -3,7 +3,9 @@ import type { OrderWithDetails } from '@/composables/useOrders'
 import type { PaymentStatus, ItemStatus } from '@/types'
 import { h } from 'vue'
 import Badge from '@/components/ui/Badge.vue'
+import Button from '@/components/ui/Button.vue'
 import HoverCard from '@/components/ui/HoverCard.vue'
+import { Eye } from 'lucide-vue-next'
 import { formatSource, formatPayment } from '@/lib/formatters'
 import { getPaymentVariant, statusColorMap } from '@/lib/variants'
 import { sourceOptionsWithoutAll, paymentOptionsWithoutAll } from '@/lib/constants'
@@ -31,7 +33,10 @@ export function createColumns(callbacks: ColumnCallbacks): ColumnDef<OrderWithDe
       return h(
         'button',
         {
-          onClick: () => row.toggleExpanded(),
+          onClick: (e: Event) => {
+            e.stopPropagation()
+            row.toggleExpanded()
+          },
           class: 'p-2 rounded transition-colors',
         },
         h('svg', {
@@ -215,20 +220,19 @@ export function createColumns(callbacks: ColumnCallbacks): ColumnDef<OrderWithDe
     cell: ({ row }) => {
       const order = row.original
       return h(
-        'button',
+        Button,
         {
-          onClick: () => callbacks.onOpenDetail(order.id),
-          class: 'p-2 hover:bg-accent rounded-md transition-colors',
+          variant: 'outline',
+          size: 'sm',
+          onClick: (e: Event) => {
+            e.stopPropagation()
+            callbacks.onOpenDetail(order.id)
+          },
         },
-        h('svg', {
-          class: 'h-5 w-5',
-          fill: 'currentColor',
-          viewBox: '0 0 24 24',
-        }, [
-          h('circle', { cx: '12', cy: '5', r: '2' }),
-          h('circle', { cx: '12', cy: '12', r: '2' }),
-          h('circle', { cx: '12', cy: '19', r: '2' }),
-        ])
+        () => [
+          h(Eye, { class: 'h-4 w-4 mr-2' }),
+          'View order'
+        ]
       )
     },
     enableSorting: false,

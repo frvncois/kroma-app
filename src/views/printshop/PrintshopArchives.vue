@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useOrderItems, type OrderItemWithDetails } from '@/composables/useOrderItems'
 import { useAuthStore } from '@/stores/auth'
@@ -85,13 +85,7 @@ const columns = [
     header: 'Status',
     cell: ({ row }: any) => {
       const item = row.original as OrderItemWithDetails
-      return {
-        component: Badge,
-        props: {
-          variant: getStatusVariant(item.status)
-        },
-        text: formatStatus(item.status)
-      }
+      return h(Badge, { variant: getStatusVariant(item.status) }, () => formatStatus(item.status))
     }
   },
   {
@@ -99,13 +93,9 @@ const columns = [
     header: 'Payment',
     cell: ({ row }: any) => {
       const item = row.original as OrderItemWithDetails
-      return {
-        component: Badge,
-        props: {
-          variant: getPaymentVariant(item.order.payment_status)
-        },
-        text: formatPayment(item.order.payment_status)
-      }
+      return h(Badge, { variant: getPaymentVariant(item.order.payment_status) }, () =>
+        formatPayment(item.order.payment_status)
+      )
     }
   },
   {
@@ -136,7 +126,7 @@ const handleRowClick = (item: OrderItemWithDetails) => {
 <template>
   <div class="h-full w-full">
     <!-- Main Content -->
-    <div class="flex h-full flex-col space-y-10 p-10">
+    <div class="flex h-full flex-col space-y-10 p-10 pt-24">
       <!-- Header -->
       <div class="flex items-center justify-between flex-shrink-0">
         <div>

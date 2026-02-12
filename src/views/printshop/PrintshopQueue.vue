@@ -69,18 +69,9 @@ const handleStatusChange = (itemId: string, status: ItemStatus) => {
   })
 }
 
-// Filtered activities (only show activities for our items/orders)
+// Filtered activities (use role-scoped activities from store)
 const filteredActivities = computed(() => {
-  const myItemIds = new Set(myItems.value.map(i => i.id))
-  const myOrderIds = new Set(myItems.value.map(i => i.order_id))
-
-  return activityStore.allActivities.filter(activity => {
-    // Show if activity is about one of our items
-    if (activity.item && myItemIds.has(activity.item.id)) return true
-    // Show if activity is about one of our orders
-    if (activity.order && myOrderIds.has(activity.order.id)) return true
-    return false
-  })
+  return activityStore.getActivitiesForRole()
 })
 
 // Sheet state
@@ -100,6 +91,18 @@ watch(() => route.query.openItem, (itemId) => {
   if (itemId && typeof itemId === 'string') {
     openItemDetail(itemId)
     router.replace({ query: { ...route.query, openItem: undefined } })
+  }
+}, { immediate: true })
+
+// Handle openOrder query param (from search)
+watch(() => route.query.openOrder, (orderId) => {
+  if (orderId && typeof orderId === 'string') {
+    // Find an item in our items that belongs to this order
+    const item = myItems.value.find(i => i.order_id === orderId)
+    if (item) {
+      openItemDetail(item.id)
+    }
+    router.replace({ query: { ...route.query, openOrder: undefined } })
   }
 }, { immediate: true })
 
@@ -206,18 +209,16 @@ const handleItemDrop = (itemId: string, newStatus: ItemStatus) => {
   })
 }
 
-const handleKanbanItemClick = (orderId: string) => {
-  const item = myItems.value.find(i => i.order_id === orderId)
-  if (item) {
-    openItemDetail(item.id)
-  }
+const handleKanbanItemClick = (itemId: string) => {
+  // Now receiving item ID directly from kanban
+  openItemDetail(itemId)
 }
 </script>
 
 <template>
   <div class="h-full mr-80 w-full">
     <!-- Main Content -->
-    <div class="flex h-full flex-col space-y-10 p-10">
+    <div class="flex h-full flex-col space-y-10 p-10 pt-24">
       <!-- Header -->
       <div class="flex items-center justify-between flex-shrink-0">
         <div>

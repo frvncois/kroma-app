@@ -5,7 +5,7 @@ import { usePrintshops } from '@/composables/usePrintshops'
 import { formatDate, isOverdue, formatRelativeDueDate } from '@/lib/formatters'
 import FilterSelect from '@/components/ui/FilterSelect.vue'
 import ItemStatusCombobox from '@/components/ItemStatusCombobox.vue'
-import DateInput from '@/components/ui/DateInput.vue'
+import DatePicker from '@/components/ui/DatePicker.vue'
 
 const { getPrintshops } = usePrintshops()
 
@@ -94,7 +94,7 @@ const handleDueDateUpdate = (date: string | null) => {
     <!-- Due Date Input -->
     <div v-if="showDueDate">
       <label class="text-xs text-muted-foreground mb-1 block">Due Date</label>
-      <DateInput
+      <DatePicker
         v-if="!readonly"
         :model-value="item.due_date"
         @update:model-value="handleDueDateUpdate"

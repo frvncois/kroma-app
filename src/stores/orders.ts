@@ -89,6 +89,22 @@ export const useOrderStore = defineStore('orders', () => {
     return 0
   }
 
+  // Get all items with order and customer details enriched
+  function getAllItems() {
+    const customerStore = useCustomerStore()
+
+    return orderItems.value.map((item) => {
+      const order = orders.value.find((o) => o.id === item.order_id)!
+      const customer = customerStore.getCustomerById(order.customer_id)!
+
+      return {
+        ...item,
+        order,
+        customer,
+      }
+    })
+  }
+
   // Helper to create activity entries
   function createActivity(
     type: Activity['type'],
@@ -317,6 +333,12 @@ export const useOrderStore = defineStore('orders', () => {
     }
   }
 
+  function getOrdersByCustomerId(customerId: string): OrderWithDetails[] {
+    return ordersWithDetails.value
+      .filter((order) => order.customer_id === customerId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }
+
   return {
     // State
     orders,
@@ -324,6 +346,8 @@ export const useOrderStore = defineStore('orders', () => {
     // Getters
     ordersWithDetails,
     getOrderById,
+    getOrdersByCustomerId,
+    getAllItems,
     filesCount,
     commentsCount,
     // Actions

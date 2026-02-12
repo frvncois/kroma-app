@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { CalendarDate, toCalendarDate } from '@internationalized/date'
 import type { DateValue } from '@internationalized/date'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import {
@@ -16,52 +15,26 @@ import {
   CalendarGridRow,
   CalendarCellTrigger,
 } from 'radix-vue'
-import { computed } from 'vue'
 import { cn } from '@/lib/utils'
 
 interface Props {
-  modelValue?: Date
+  modelValue?: DateValue
   defaultPlaceholder?: DateValue
   initialFocus?: boolean
-  layout?: 'month-and-year' | 'month' | 'year'
   class?: string
 }
 
 const props = defineProps<Props>()
 
-interface Emits {
-  (e: 'update:modelValue', value: Date | undefined): void
-}
-
-const emit = defineEmits<Emits>()
-
-// Convert Date to DateValue
-const calendarValue = computed({
-  get: () => {
-    if (!props.modelValue) return undefined
-    const date = props.modelValue
-    return toCalendarDate(
-      new CalendarDate(
-        date.getFullYear(),
-        date.getMonth() + 1,
-        date.getDate()
-      )
-    )
-  },
-  set: (value: DateValue | undefined) => {
-    if (!value) {
-      emit('update:modelValue', undefined)
-    } else {
-      const date = new Date(value.year, value.month - 1, value.day)
-      emit('update:modelValue', date)
-    }
-  }
-})
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: DateValue | undefined): void
+}>()
 </script>
 
 <template>
   <CalendarRoot
-    v-model="calendarValue"
+    :model-value="modelValue"
+    @update:model-value="(val) => emit('update:modelValue', val)"
     :default-placeholder="defaultPlaceholder"
     :initial-focus="initialFocus"
     :class="cn('p-3', props.class)"

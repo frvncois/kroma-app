@@ -65,7 +65,12 @@ export function useOrderItems() {
     )
   }
 
+  const getAllItems = () => {
+    return orderStore.getAllItems()
+  }
+
   return {
+    getAllItems,
     getItemsByPrintshop,
     getItemsByStatus,
     getItemsByPrintshopAndStatus,

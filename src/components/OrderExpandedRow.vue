@@ -2,7 +2,7 @@
 import type { OrderWithDetails } from '@/composables/useOrders'
 import type { Printshop, ItemStatus } from '@/types'
 import ItemControls from '@/components/ItemControls.vue'
-import { FileText, MessageSquare } from 'lucide-vue-next'
+import { FileText, MessageSquare, PanelRightOpen } from 'lucide-vue-next'
 
 interface Props {
   order: OrderWithDetails

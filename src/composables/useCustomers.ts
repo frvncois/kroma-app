@@ -11,5 +11,9 @@ export function useCustomers() {
   return {
     getCustomers: () => store.allCustomers,
     getCustomerById: (id: string) => store.getCustomerById(id),
+    addCustomer: store.addCustomer,
+    updateCustomer: store.updateCustomer,
+    getCustomerOrderStats: store.getCustomerOrderStats,
+    searchCustomers: store.searchCustomers,
   }
 }

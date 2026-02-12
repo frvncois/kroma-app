@@ -45,10 +45,27 @@ interface SearchResult {
 
 const searchResults = computed<SearchResult[]>(() => {
   const query = debouncedQuery.value.toLowerCase().trim()
+  const { isManager, isPrintshopManager, isDriver, userShops } = authStore
 
   if (!query) {
-    // Show recent orders
-    const recentOrders = orderStore.ordersWithDetails
+    // Show recent orders filtered by role
+    let recentOrders = orderStore.ordersWithDetails
+
+    // Driver: only ready orders for delivery
+    if (isDriver) {
+      recentOrders = recentOrders.filter(o =>
+        o.delivery_method === 'delivery' &&
+        o.items.every(i => ['ready', 'out_for_delivery', 'delivered'].includes(i.status))
+      )
+    }
+    // Printshop Manager: only orders with items assigned to their shops
+    else if (isPrintshopManager) {
+      recentOrders = recentOrders.filter(o =>
+        o.items.some(i => i.assigned_printshop && userShops.includes(i.assigned_printshop))
+      )
+    }
+
+    const recent = recentOrders
       .slice(0, 5)
       .map((order): SearchResult => ({
         type: 'order',
@@ -61,16 +78,13 @@ const searchResults = computed<SearchResult[]>(() => {
         },
         data: order
       }))
-    return recentOrders
+    return recent
   }
 
   const results: SearchResult[] = []
 
-  // Filter based on role
-  const { isManager, isPrintshopManager, isDriver, userShops } = authStore
-
-  // Search orders (for Manager and Driver)
-  if (isManager || isDriver) {
+  // Search orders (for Manager, Printshop Manager, and Driver)
+  if (isManager || isPrintshopManager || isDriver) {
     let orders = orderStore.ordersWithDetails
 
     // Driver: only ready orders for delivery
@@ -78,6 +92,12 @@ const searchResults = computed<SearchResult[]>(() => {
       orders = orders.filter(o =>
         o.delivery_method === 'delivery' &&
         o.items.every(i => ['ready', 'out_for_delivery', 'delivered'].includes(i.status))
+      )
+    }
+    // Printshop Manager: only orders with items assigned to their shops
+    else if (isPrintshopManager) {
+      orders = orders.filter(o =>
+        o.items.some(i => i.assigned_printshop && userShops.includes(i.assigned_printshop))
       )
     }
 
@@ -128,13 +148,19 @@ const searchResults = computed<SearchResult[]>(() => {
     results.push(...customerResults)
   }
 
-  // Search items
+  // Search items (filtered by role)
   let items = orderStore.orderItems
 
   // Printshop Manager: only items assigned to their shops
   if (isPrintshopManager) {
     items = items.filter(item =>
       item.assigned_printshop && userShops.includes(item.assigned_printshop)
+    )
+  }
+  // Driver: only items ready for delivery
+  else if (isDriver) {
+    items = items.filter(item =>
+      ['ready', 'out_for_delivery', 'delivered'].includes(item.status)
     )
   }
 
@@ -225,15 +251,34 @@ const handleKeyDown = (e: KeyboardEvent) => {
 
 // Select result
 const selectResult = (result: SearchResult) => {
+  const { isManager, isPrintshopManager, isDriver } = authStore
+
   if (result.type === 'order') {
     const order = result.data as OrderWithDetails
-    router.push({ path: '/manager/orders', query: { openOrder: order.id } })
+    // Route to appropriate view based on role
+    if (isManager) {
+      router.push({ path: '/manager/orders', query: { openOrder: order.id } })
+    } else if (isPrintshopManager) {
+      router.push({ path: '/printshop/queue', query: { openOrder: order.id } })
+    } else if (isDriver) {
+      router.push({ path: '/driver/deliveries', query: { openOrder: order.id } })
+    }
   } else if (result.type === 'customer') {
-    router.push('/manager/customers')
+    // Only managers can access customers page
+    if (isManager) {
+      router.push('/manager/customers')
+    }
   } else if (result.type === 'item') {
     const item = result.data as OrderItem & { order?: OrderWithDetails }
     if (item.order) {
-      router.push({ path: '/manager/orders', query: { openOrder: item.order.id } })
+      // Route to appropriate view based on role
+      if (isManager) {
+        router.push({ path: '/manager/orders', query: { openOrder: item.order.id } })
+      } else if (isPrintshopManager) {
+        router.push({ path: '/printshop/queue', query: { openOrder: item.order.id } })
+      } else if (isDriver) {
+        router.push({ path: '/driver/deliveries', query: { openOrder: item.order.id } })
+      }
     }
   }
   closeDialog()

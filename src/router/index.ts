@@ -8,6 +8,7 @@ import ManagerArchives from '@/views/manager/ManagerArchives.vue'
 import PrintshopQueue from '@/views/printshop/PrintshopQueue.vue'
 import PrintshopArchives from '@/views/printshop/PrintshopArchives.vue'
 import DriverDeliveries from '@/views/driver/DriverDeliveries.vue'
+import DriverArchives from '@/views/driver/DriverArchives.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -73,6 +74,11 @@ const router = createRouter({
           path: 'deliveries',
           name: 'driver-deliveries',
           component: DriverDeliveries,
+        },
+        {
+          path: 'history',
+          name: 'driver-history',
+          component: DriverArchives,
         },
       ],
     },

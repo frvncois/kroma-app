@@ -273,11 +273,13 @@ Current printshops: **In House**, **Victor**, **Studio C**. More may be added la
 
 **Phase 1 mock users:**
 
-| Email              | Name    | Role              | Assigned Shops | Password |
-|--------------------|---------|-------------------|----------------|----------|
-| manager@kroma.com  | Manager | manager           | [] (all access)| 1234     |
-| victor@kroma.com   | Victor  | printshop_manager | ['victor']     | 1234     |
-| driver@kroma.com   | Driver  | driver            | []             | 1234     |
+| Email              | Name           | Role              | Assigned Shops | Password |
+|--------------------|----------------|-------------------|----------------|----------|
+| manager@kroma.com  | Manager        | manager           | [] (all access)| 1234     |
+| victor@kroma.com   | Victor         | printshop_manager | ['victor']     | 1234     |
+| alex@kroma.com     | Alex Tremblay  | driver            | []             | 1234     |
+| sam@kroma.com      | Sam Bouchard   | driver            | []             | 1234     |
+| jordan@kroma.com   | Jordan Lavoie  | driver            | []             | 1234     |
 
 #### `status_history`
 | Column         | Type     | Notes                                          |
@@ -358,6 +360,24 @@ The activity feed is **not a separate table**. It is computed/derived from all s
 
 In Phase 1, a mock activities array is used for UI development. In Phase 2+, the activity feed will be a computed view across `status_history`, orders, and notes.
 
+#### Activity Scoping by Role
+
+The activity feed is filtered based on the current user's role:
+- **Manager:** Sees all activities across the system
+- **Printshop Manager:** Sees activities for items assigned to their shop(s), plus new order notifications
+- **Driver:** Sees delivery/pickup activities, status changes to/from delivery-related statuses (ready, out_for_delivery, delivered, picked_up), assignment notifications, and new order notifications
+
+Scoping is computed at read time based on the activity's metadata (item assignment, activity type, status values). No separate scope field is stored — this keeps the data model clean and allows dynamic recomputation when items are reassigned.
+
+#### Activity Scoping by Role
+
+The activity feed is filtered based on the current user's role:
+- **Manager:** Sees all activities across the system
+- **Printshop Manager:** Sees activities for items assigned to their shop(s), plus new order notifications
+- **Driver:** Sees delivery/pickup activities, status changes to/from delivery-related statuses (ready, out_for_delivery, delivered, picked_up), assignment notifications, and new order notifications
+
+Scoping is computed at read time based on the activity's metadata (item assignment, activity type, status values). No separate scope field is stored — this keeps the data model clean and allows dynamic recomputation when items are reassigned.
+
 ---
 
 ## 8. Views Per Role
@@ -367,7 +387,7 @@ In Phase 1, a mock activities array is used for UI development. In Phase 2+, the
 - **Order Detail** — Full view: customer, items, files, payment, status history
 - **Order Review** — Assign items to printshops, update payment, change statuses
 - **Manual Order Entry** — Full form to create orders (search/create customer, add items, upload files)
-- **Customer Management** — Customer list, profiles, order history, merge duplicates
+- **Customer Management** — Customer table with search, inline stats (total, active, new this month). Customer detail sheet shows profile info + full order history with clickable orders. Dual-sheet interaction: customer detail on right, order detail on left. New customer creation via sheet form.
 - **Overview/Stats** — Order counts, production status breakdown, revenue (optional)
 
 ### 8.2 Printshop Manager Dashboard
@@ -377,22 +397,174 @@ In Phase 1, a mock activities array is used for UI development. In Phase 2+, the
 - **Mark `picked_up`** — For customer pickup orders
 
 ### 8.3 Driver Dashboard (Mobile-First)
-- **Delivery Queue** — Orders where ALL items are `ready` AND delivery method is `delivery`
-- **Route Planner** — Select orders for a delivery run, Google Maps optimizes the route
-- **Route View** — Ordered stop list (pickups at shops, then dropoffs to customers)
-- **Stop Completion** — Tap to mark each stop as completed
+- **Delivery Queue** — Shows ALL deliverable orders (items `ready` or `out_for_delivery`, delivery method `delivery`) grouped by priority:
+  - 🔴 Overdue
+  - 🟠 Due Today
+  - 🟡 Due Tomorrow
+  - ⚪ Upcoming & Unscheduled
+- **AI-Generated Route** — Driver inputs shift end time (e.g., 17:00), AI generates optimized route with pickups and dropoffs
+- **Live Route Map** — Mapbox GL map showing completed/current/upcoming stops with color-coded markers and road-following route lines
+- **Real-Time New Item Detection** — Watcher detects new ready items during active route, prompts driver to recalculate with new stops added
+- **Item Transfer Between Active Drivers** — Transfer items/stops to other active drivers when needed (e.g., route overflow, shift end)
+- **Route View** — Ordered stop list with status indicators (pending, current, completed). Shows estimated arrival times, stop durations, and AI notes
+- **Stop Completion** — Tap to mark each stop as completed. Pickup stops auto-lock items (prevents unassignment)
 - **Mark `picked_up`** — For customer pickup orders (if driver is at a shop)
+- **Delivery History** — Table view of completed deliveries (delivered, picked_up, canceled). Search by product, order, customer. Read-only archive.
 
 ---
 
-## 9. Route Optimization Logic
+## 9. AI-Powered Route Optimization (OpenAI)
 
-- Driver selects which orders to include in a delivery run
-- Kroma computes stops: **pickups** at printshop locations + **dropoffs** at customer addresses
-- Constraint: pickups must happen before their related dropoffs
-- Uses **Google Directions API** with `optimizeWaypoints` (supports up to 25 waypoints)
-- Route accounts for all printshop locations as potential starting/intermediate points
-- Driver follows the optimized sequence and marks stops as completed
+### 9.1 Overview
+
+Kroma uses **OpenAI (gpt-4o)** to generate optimized delivery routes with shift time awareness. The AI system replaces manual order selection with intelligent route planning that considers time constraints, distances, stop priorities, and operational rules.
+
+**Home Base (Montréal):** 4641 Av. Papineau, Montréal, QC H2H 1V3
+
+### 9.2 Route Generation Flow
+
+1. **Driver starts route:**
+   - Clicks "Start Route" button in DriverDeliveries view
+   - System detects all deliverable items (status `ready` or `out_for_delivery`, delivery method `delivery`)
+   - StartRouteDialog prompts for shift end time (presets: 15:00, 16:00, 17:00, 18:00, or custom)
+   - System builds stops: pickups at printshops + dropoffs at customer addresses
+   - System calls `generateRoute()` in `src/lib/route-service.ts` with stop inputs and shift end time
+
+2. **OpenAI generates route:**
+   - Builds structured prompt with Montréal-specific context (home base, stop details, constraints, shift duration)
+   - Calls `gpt-4o` with temperature 0.2 for consistent, deterministic routing
+   - AI returns optimized stop sequence with estimated times, durations, distances, notes, and warnings
+   - Response includes `stopsOverCapacity` count for stops that may not fit in shift
+
+3. **Route activation:**
+   - Driver store creates `DriverRoute` object with enriched stops
+   - All relevant items marked as `out_for_delivery`
+   - Items assigned to current driver (prevents other drivers from seeing them)
+   - Route UI shows optimized stop sequence with status indicators
+
+### 9.3 Key Routing Rules
+
+**Enforced by AI:**
+- Home base (4641 Av. Papineau) must be first stop
+- All pickups before their related dropoffs
+- Time-aware prioritization (overdue items get priority)
+- Realistic stop durations (5-10 min pickup, 10-15 min dropoff)
+- Distance and drive time optimization for Montréal geography
+- Stops beyond shift capacity flagged with warnings
+
+**Stop Structure:**
+- **Type:** `pickup` (at printshop) or `dropoff` (at customer) or `task` (ad-hoc)
+- **Status:** `pending` → `current` → `completed`
+- **Locked items:** Items physically picked up cannot be unassigned (prevents inventory loss)
+- **Metadata:** Estimated arrival time, duration, notes, photos, issue flags, cancellation
+
+### 9.4 Mid-Route Updates
+
+When new items become `ready` during an active route:
+- System detects new deliverable items via watcher
+- Shows notification: "New deliveries available. Recalculate route to add them?"
+- Driver confirms recalculation
+- System calls `recalculateRoute()` (NOT `generateRoute()`)
+- **Preserves completed stops** — only re-optimizes pending stops + new items
+- Driver route updates seamlessly with new stops inserted
+
+**Function signature:**
+```typescript
+recalculateRoute(input: {
+  completedStops: RouteStop[]
+  remainingStops: RouteStop[]
+  newStops: RouteStopInput[]
+  shiftEndTime: string
+  driverName: string
+})
+```
+
+### 9.5 Multi-Driver Coordination
+
+Multiple drivers can be active simultaneously with item assignment isolation:
+
+**Active Driver Sessions:**
+- Login auto-registers driver session (via `driverStore.registerDriverSession()`)
+- Logout auto-unregisters session
+- Active drivers tracked in `driverStore.activeSessions`
+
+**Item Assignment Rules:**
+- Items assigned to driver when route starts (on `out_for_delivery` transition)
+- Other drivers cannot see assigned items in their deliverable queue
+- Filter logic: `!driverStore.isItemAssignedToOtherDriver(item.id)`
+
+**Transfer Between Drivers:**
+- TransferDialog shows other active drivers with status (On Route / Available)
+- Driver can transfer items to another active driver
+- Locked (picked-up) items can only be transferred (cannot be unassigned)
+- Transfer updates item assignment and removes stops from source driver's route
+
+**Empty State:**
+- If no other drivers active, transfer dialog shows: "No other drivers are currently active. Items can only be transferred to active drivers."
+
+### 9.6 Route Service Implementation
+
+**File:** `src/lib/route-service.ts`
+
+**Key Functions:**
+- `generateRoute(input)` — Initial route generation with shift end time
+- `recalculateRoute(input)` — Mid-route update preserving completed stops
+- `buildRoutePrompt(input)` — Constructs AI prompt with constraints and context
+- `getOpenAIClient()` — Creates OpenAI client with API key from environment
+
+**Environment Variable:**
+```
+VITE_OPENAI_API_KEY=sk-...
+```
+
+**OpenAI Configuration:**
+- Model: `gpt-4o`
+- Temperature: `0.2` (deterministic routing)
+- Max tokens: `4000`
+- Response format: Structured JSON with stop sequence, summary, metrics, warnings
+
+### 9.7 Driver Store State
+
+**File:** `src/stores/drivers.ts`
+
+**Managed State:**
+- `activeSessions` — Map of driver ID → driver info (name, startTime)
+- `routes` — Map of driver ID → DriverRoute
+- `itemAssignments` — Map of item ID → driver ID
+- `lockedItems` — Set of item IDs physically picked up (cannot unassign)
+
+**Key Actions:**
+- `registerDriverSession(driverId)` — Auto-called on login
+- `unregisterDriverSession(driverId)` — Auto-called on logout
+- `setDriverRoute(driverId, route)` — Store generated route
+- `assignItemsToDriver(driverId, itemIds)` — Assign items on route start
+- `lockItemsAtStop(stopId)` — Lock items when pickup completed
+- `transferItems(itemIds, targetDriverId)` — Move items between drivers
+- `isItemAssignedToOtherDriver(itemId)` — Filter helper for deliverable queue
+
+### 9.8 Adding New Drivers
+
+To add a new driver to the system:
+
+1. Add user account to `src/data/mock/users.ts`:
+```typescript
+{
+  id: 'user-X',
+  name: 'Driver Name',
+  email: 'email@kroma.com',
+  password: '1234',
+  role: 'driver',
+  assigned_shops: [],
+  created_at: '2024-01-01T00:00:00Z',
+}
+```
+
+2. No other configuration needed — driver session auto-registers on login
+
+**Current Drivers (Phase 1):**
+- Alex Tremblay (alex@kroma.com)
+- Sam Bouchard (sam@kroma.com)
+- Jordan Lavoie (jordan@kroma.com)
 
 ---
 
@@ -459,6 +631,7 @@ In Phase 1, a mock activities array is used for UI development. In Phase 2+, the
   - Delivery queue (orders ready for delivery)
   - Route view (static, no Google Maps yet)
   - Stop completion UI
+  - Delivery history/archives
 
 ### Phase 2 — Supabase Integration
 - Supabase project setup (database, auth, storage)
@@ -536,11 +709,13 @@ src/
 │   ├── formatters.ts              Domain formatters (dates, statuses, currency)
 │   ├── variants.ts                Badge/color variant mappings
 │   ├── constants.ts               Filter options, kanban columns, enums
+│   ├── route-service.ts           OpenAI route generation service
 │   └── utils.ts                   General helpers (cn, etc.)
 ├── stores/                     ← Pinia stores (single source of truth)
 │   ├── auth.ts
 │   ├── orders.ts
 │   ├── customers.ts
+│   ├── drivers.ts                 Driver sessions, routes, item assignments
 │   └── activities.ts
 ├── composables/                ← Thin wrappers around stores
 │   ├── useOrders.ts
@@ -566,6 +741,8 @@ src/
 │   ├── OrderExpandedRow.vue       Expanded row for table view
 │   ├── StatsSheet.vue             Drill-down sheet for stats
 │   ├── AssignmentDialog.vue       Confirmation dialog
+│   ├── StartRouteDialog.vue       Shift end time input for route generation
+│   ├── TransferDialog.vue         Transfer items between active drivers
 │   ├── ItemControls.vue           Reusable item editing (status, printshop, dates)
 │   ├── NotesSection.vue           Reusable notes CRUD
 │   ├── OrderDetailSheet.vue       Order detail slide-out
@@ -582,7 +759,8 @@ src/
 │   ├── printshop/
 │   │   └── PrintshopQueue.vue     Kanban production queue
 │   └── driver/
-│       └── DriverDeliveries.vue   Delivery queue + route
+│       ├── DriverDeliveries.vue   AI-powered delivery queue + route
+│       └── DriverArchives.vue     Delivery history archives
 └── router/index.ts                Role-aware routing with auth guards
 ```
 

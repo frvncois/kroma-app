@@ -245,7 +245,9 @@ watch(() => mentionSuggestions.value.length, () => {
 <template>
   <div>
     <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-      <MessageSquare class="h-5 w-5" />
+      <div class="p-2 bg-accent rounded-lg">
+        <MessageSquare class="h-4 w-4" />
+      </div>
       Notes ({{ notes.length }})
     </h3>
 

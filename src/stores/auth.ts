@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { User } from '@/types'
 import { users } from '@/data/mock/users'
+import { useDriverStore } from './drivers'
 
 export const useAuthStore = defineStore('auth', () => {
   // State
@@ -21,6 +22,13 @@ export const useAuthStore = defineStore('auth', () => {
 
     if (user) {
       currentUser.value = user
+
+      // Register driver session
+      if (user.role === 'driver') {
+        const driverStore = useDriverStore()
+        driverStore.registerDriverSession(user.id)
+      }
+
       return { success: true }
     }
 
@@ -28,6 +36,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function logout() {
+    if (currentUser.value?.role === 'driver') {
+      const driverStore = useDriverStore()
+      driverStore.unregisterDriverSession(currentUser.value.id)
+    }
     currentUser.value = null
   }
 

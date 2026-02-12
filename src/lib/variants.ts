@@ -4,41 +4,25 @@ import type { ItemStatus, PaymentStatus, OrderSource } from '@/types'
  * Badge variant types used in the UI
  */
 export type BadgeVariant =
-  | 'default'
-  | 'secondary'
-  | 'success'
-  | 'warning'
-  | 'info'
-  | 'destructive'
-  | 'outline'
+  | 'default' | 'secondary' | 'success' | 'warning' | 'info' | 'destructive' | 'outline'
+  | 'slate' | 'blue' | 'amber' | 'orange' | 'cyan' | 'violet' | 'emerald' | 'teal' | 'red'
 
 /**
  * Get badge variant for item status
  */
 export function getStatusVariant(status: ItemStatus | 'mixed'): BadgeVariant {
   switch (status) {
-    case 'new':
-      return 'info'
-    case 'assigned':
-      return 'secondary'
-    case 'in_production':
-      return 'warning'
-    case 'on_hold':
-      return 'secondary'
-    case 'ready':
-      return 'info'
-    case 'out_for_delivery':
-      return 'warning'
-    case 'delivered':
-      return 'success'
-    case 'picked_up':
-      return 'success'
-    case 'canceled':
-      return 'destructive'
-    case 'mixed':
-      return 'secondary'
-    default:
-      return 'default'
+    case 'new':              return 'slate'
+    case 'assigned':         return 'blue'
+    case 'in_production':    return 'amber'
+    case 'on_hold':          return 'orange'
+    case 'ready':            return 'cyan'
+    case 'out_for_delivery': return 'violet'
+    case 'delivered':        return 'emerald'
+    case 'picked_up':        return 'teal'
+    case 'canceled':         return 'red'
+    case 'mixed':            return 'secondary'
+    default:                 return 'default'
   }
 }
 
@@ -70,15 +54,15 @@ export function getSourceVariant(source: OrderSource): BadgeVariant {
  * Color map for status indicators (kanban cards, status dots, etc.)
  */
 export const statusColorMap: Record<ItemStatus, string> = {
-  new: 'bg-blue-500',
-  assigned: 'bg-blue-500',
-  in_production: 'bg-amber-500',
-  on_hold: 'bg-zinc-400',
-  ready: 'bg-cyan-500',
-  out_for_delivery: 'bg-amber-500',
-  delivered: 'bg-emerald-500',
-  picked_up: 'bg-emerald-500',
-  canceled: 'bg-red-500',
+  new:              'bg-slate-600',
+  assigned:         'bg-blue-600',
+  in_production:    'bg-amber-600',
+  on_hold:          'bg-orange-600',
+  ready:            'bg-cyan-600',
+  out_for_delivery: 'bg-violet-600',
+  delivered:        'bg-emerald-600',
+  picked_up:        'bg-teal-600',
+  canceled:         'bg-red-600',
 }
 
 /**

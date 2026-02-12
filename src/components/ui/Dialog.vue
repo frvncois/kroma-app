@@ -43,10 +43,7 @@ watch(
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
         @click="handleBackdropClick"
       >
-        <div
-          class="relative max-h-[90vh] w-full max-w-2xl overflow-auto rounded-lg border bg-background shadow-lg"
-          @click.stop
-        >
+        <div @click.stop>
           <slot :close="close" />
         </div>
       </div>

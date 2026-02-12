@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { DateFormatter, getLocalTimeZone, today } from '@internationalized/date'
+import { ref, computed } from 'vue'
+import type { DateValue } from '@internationalized/date'
+import { CalendarDate, DateFormatter, getLocalTimeZone } from '@internationalized/date'
 import { CalendarIcon } from 'lucide-vue-next'
-import { ref, computed, watch } from 'vue'
+import { cn } from '@/lib/utils'
 import Button from './Button.vue'
 import Calendar from './Calendar.vue'
 import Popover from './Popover.vue'
 import PopoverContent from './PopoverContent.vue'
 import PopoverTrigger from './PopoverTrigger.vue'
-import { cn } from '@/lib/utils'
 
 interface Props {
   modelValue?: string | null
@@ -16,68 +17,85 @@ interface Props {
   class?: string
 }
 
-interface Emits {
-  (e: 'update:modelValue', value: string | null): void
-}
-
 const props = withDefaults(defineProps<Props>(), {
   placeholder: 'Pick a date',
 })
 
-const emit = defineEmits<Emits>()
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: string | null): void
+}>()
 
-const date = ref<Date>()
-const defaultPlaceholder = today(getLocalTimeZone())
+const df = new DateFormatter('en-US', {
+  dateStyle: 'medium',
+})
 
-// Convert string to Date for internal use
-watch(() => props.modelValue, (newValue) => {
-  if (!newValue) {
-    date.value = undefined
-  } else {
-    date.value = new Date(newValue)
+const isOpen = ref(false)
+
+// Convert string "YYYY-MM-DD" to CalendarDate for the Calendar component
+const calendarValue = computed<DateValue | undefined>(() => {
+  if (!props.modelValue) return undefined
+  try {
+    // Split "YYYY-MM-DD" and construct CalendarDate
+    const parts = props.modelValue.split('-')
+    if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return undefined
+
+    const year = parseInt(parts[0], 10)
+    const month = parseInt(parts[1], 10)
+    const day = parseInt(parts[2], 10)
+
+    if (isNaN(year) || isNaN(month) || isNaN(day)) {
+      return undefined
+    }
+
+    return new CalendarDate(year, month, day)
+  } catch {
+    return undefined
   }
-}, { immediate: true })
+})
 
-// Convert Date back to string when changed
-const handleDateChange = (newDate: Date | undefined) => {
-  date.value = newDate
-  if (!newDate) {
+// Display formatted date or placeholder
+const displayValue = computed(() => {
+  if (!calendarValue.value) return null
+  // Convert DateValue to native Date for the formatter
+  return df.format(calendarValue.value.toDate(getLocalTimeZone()))
+})
+
+// Handle calendar selection
+const handleSelect = (value: DateValue | undefined) => {
+  if (!value) {
     emit('update:modelValue', null)
   } else {
-    // Format as YYYY-MM-DD
-    const year = newDate.getFullYear()
-    const month = String(newDate.getMonth() + 1).padStart(2, '0')
-    const day = String(newDate.getDate()).padStart(2, '0')
+    // Format as YYYY-MM-DD string
+    const year = String(value.year)
+    const month = String(value.month).padStart(2, '0')
+    const day = String(value.day).padStart(2, '0')
     emit('update:modelValue', `${year}-${month}-${day}`)
   }
+  isOpen.value = false
 }
-
-const displayValue = computed(() => {
-  if (!date.value) return props.placeholder
-  return date.value.toDateString()
-})
 </script>
 
 <template>
-  <Popover>
-    <PopoverTrigger
-      :disabled="disabled"
-      :class="cn(
-        'flex h-9 w-full items-center justify-start rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
-        !date && 'text-muted-foreground',
-        props.class
-      )"
-    >
-      <CalendarIcon class="mr-2 h-4 w-4" />
-      {{ displayValue }}
+  <Popover v-model:open="isOpen">
+    <PopoverTrigger as-child>
+      <Button
+        variant="outline"
+        :disabled="disabled"
+        :class="cn(
+          'w-full justify-start text-left font-normal h-9',
+          !calendarValue && 'text-muted-foreground',
+          props.class
+        )"
+      >
+        <CalendarIcon class="mr-2 h-4 w-4" />
+        {{ displayValue || placeholder }}
+      </Button>
     </PopoverTrigger>
     <PopoverContent class="w-auto p-0" align="start">
       <Calendar
-        :model-value="date"
-        @update:model-value="handleDateChange"
+        :model-value="calendarValue"
+        @update:model-value="handleSelect"
         :initial-focus="true"
-        :default-placeholder="defaultPlaceholder"
-        layout="month-and-year"
       />
     </PopoverContent>
   </Popover>

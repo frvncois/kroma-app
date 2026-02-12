@@ -48,7 +48,9 @@ const handleLogin = async () => {
 const testAccounts = [
   { email: 'manager@kroma.com', password: '1234', role: 'Manager' },
   { email: 'victor@kroma.com', password: '1234', role: 'Printshop Manager' },
-  { email: 'driver@kroma.com', password: '1234', role: 'Driver' },
+  { email: 'alex@kroma.com', password: '1234', role: 'Driver (Alex)' },
+  { email: 'sam@kroma.com', password: '1234', role: 'Driver (Sam)' },
+  { email: 'jordan@kroma.com', password: '1234', role: 'Driver (Jordan)' },
 ]
 
 const fillCredentials = (testEmail: string, testPassword: string) => {

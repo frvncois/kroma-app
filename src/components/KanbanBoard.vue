@@ -25,7 +25,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   'item-drop': [itemId: string, newStatus: ItemStatus, printshop: string | null]
-  'item-click': [orderId: string]
+  'item-click': [itemId: string]
 }>()
 
 const draggedItemId = ref<string | null>(null)
@@ -104,7 +104,7 @@ const getColumnItems = (status: ItemStatus, printshop: string | null) => {
               :readonly="readonly"
               @dragstart="handleDragStart(item.id)"
               @dragend="handleDragEnd"
-              @click="emit('item-click', item.order_id)"
+              @click="emit('item-click', item.id)"
             />
 
             <!-- Empty state -->

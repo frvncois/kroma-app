@@ -12,20 +12,20 @@ export const orderItems: OrderItem[] = [
     assigned_printshop: 'in-house',
     status: 'delivered',
     status_history: [
-      { status: 'new', changed_at: '2024-01-20T09:00:00Z', changed_by: 'System' },
-      { status: 'assigned', changed_at: '2024-01-20T09:15:00Z', changed_by: 'John Manager', note: 'Assigned to in-house printshop' },
-      { status: 'in_production', changed_at: '2024-01-20T10:00:00Z', changed_by: 'Mike Printer' },
-      { status: 'ready', changed_at: '2024-01-22T14:00:00Z', changed_by: 'Mike Printer', note: 'Quality check passed' },
-      { status: 'out_for_delivery', changed_at: '2024-01-22T15:00:00Z', changed_by: 'Sarah Driver' },
-      { status: 'delivered', changed_at: '2024-01-22T16:30:00Z', changed_by: 'Sarah Driver', note: 'Delivered to reception' }
+      { status: 'new', changed_at: '2026-01-30T09:00:00Z', changed_by: 'System' },
+      { status: 'assigned', changed_at: '2026-01-30T09:15:00Z', changed_by: 'John Manager', note: 'Assigned to in-house printshop' },
+      { status: 'in_production', changed_at: '2026-01-30T10:00:00Z', changed_by: 'Mike Printer' },
+      { status: 'ready', changed_at: '2026-02-01T14:00:00Z', changed_by: 'Mike Printer', note: 'Quality check passed' },
+      { status: 'out_for_delivery', changed_at: '2026-02-01T15:00:00Z', changed_by: 'Sarah Driver' },
+      { status: 'delivered', changed_at: '2026-02-01T16:30:00Z', changed_by: 'Sarah Driver', note: 'Delivered to reception' }
     ],
     notes: '',
-    due_date: '2024-01-22',
-    production_start_date: '2024-01-20T10:00:00Z',
-    production_ready_date: '2024-01-22T14:00:00Z',
-    delivery_date: '2024-01-22T16:30:00Z',
-    created_at: '2024-01-20T09:00:00Z',
-    updated_at: '2024-01-22T16:30:00Z',
+    due_date: '2026-02-01',
+    production_start_date: '2026-01-30T10:00:00Z',
+    production_ready_date: '2026-02-01T14:00:00Z',
+    delivery_date: '2026-02-01T16:30:00Z',
+    created_at: '2026-01-30T09:00:00Z',
+    updated_at: '2026-02-01T16:30:00Z',
   },
   {
     id: 'item-2',
@@ -37,19 +37,19 @@ export const orderItems: OrderItem[] = [
     assigned_printshop: 'in-house',
     status: 'delivered',
     status_history: [
-      { status: 'new', changed_at: '2024-01-20T09:00:00Z', changed_by: 'System' },
-      { status: 'assigned', changed_at: '2024-01-20T09:15:00Z', changed_by: 'John Manager' },
-      { status: 'in_production', changed_at: '2024-01-20T10:30:00Z', changed_by: 'Mike Printer' },
-      { status: 'ready', changed_at: '2024-01-22T14:30:00Z', changed_by: 'Mike Printer' },
-      { status: 'picked_up', changed_at: '2024-01-22T16:30:00Z', changed_by: 'Customer', note: 'Picked up by client' }
+      { status: 'new', changed_at: '2026-01-30T09:00:00Z', changed_by: 'System' },
+      { status: 'assigned', changed_at: '2026-01-30T09:15:00Z', changed_by: 'John Manager' },
+      { status: 'in_production', changed_at: '2026-01-30T10:30:00Z', changed_by: 'Mike Printer' },
+      { status: 'ready', changed_at: '2026-02-01T14:30:00Z', changed_by: 'Mike Printer' },
+      { status: 'picked_up', changed_at: '2026-02-01T16:30:00Z', changed_by: 'Customer', note: 'Picked up by client' }
     ],
     notes: '',
-    due_date: '2024-01-22',
-    production_start_date: '2024-01-20T10:30:00Z',
-    production_ready_date: '2024-01-22T14:30:00Z',
-    delivery_date: '2024-01-22T16:30:00Z',
-    created_at: '2024-01-20T09:00:00Z',
-    updated_at: '2024-01-22T16:30:00Z',
+    due_date: '2026-02-01',
+    production_start_date: '2026-01-30T10:30:00Z',
+    production_ready_date: '2026-02-01T14:30:00Z',
+    delivery_date: '2026-02-01T16:30:00Z',
+    created_at: '2026-01-30T09:00:00Z',
+    updated_at: '2026-02-01T16:30:00Z',
   },
 
   // Order 2 items
@@ -63,17 +63,17 @@ export const orderItems: OrderItem[] = [
     assigned_printshop: 'victor',
     status: 'in_production',
     status_history: [
-      { status: 'new', changed_at: '2024-01-21T10:30:00Z', changed_by: 'System' },
-      { status: 'assigned', changed_at: '2024-01-21T11:00:00Z', changed_by: 'John Manager', note: 'Rush order - assigned to Victor' },
-      { status: 'in_production', changed_at: '2024-01-22T08:00:00Z', changed_by: 'Victor Tech' }
+      { status: 'new', changed_at: '2026-01-31T10:30:00Z', changed_by: 'System' },
+      { status: 'assigned', changed_at: '2026-01-31T11:00:00Z', changed_by: 'John Manager', note: 'Rush order - assigned to Victor' },
+      { status: 'in_production', changed_at: '2026-02-01T08:00:00Z', changed_by: 'Victor Tech' }
     ],
     notes: 'Rush order',
-    due_date: '2024-01-24',
-    production_start_date: '2024-01-22T08:00:00Z',
+    due_date: '2026-02-24',
+    production_start_date: '2026-02-01T08:00:00Z',
     production_ready_date: null,
     delivery_date: null,
-    created_at: '2024-01-21T10:30:00Z',
-    updated_at: '2024-01-22T14:00:00Z',
+    created_at: '2026-01-31T10:30:00Z',
+    updated_at: '2026-02-01T14:00:00Z',
   },
   {
     id: 'item-4',
@@ -85,18 +85,18 @@ export const orderItems: OrderItem[] = [
     assigned_printshop: 'victor',
     status: 'ready',
     status_history: [
-      { status: 'new', changed_at: '2024-01-21T10:30:00Z', changed_by: 'System' },
-      { status: 'assigned', changed_at: '2024-01-21T11:00:00Z', changed_by: 'John Manager' },
-      { status: 'in_production', changed_at: '2024-01-21T13:00:00Z', changed_by: 'Victor Tech' },
-      { status: 'ready', changed_at: '2024-01-22T15:00:00Z', changed_by: 'Victor Tech', note: 'All 10 signs completed' }
+      { status: 'new', changed_at: '2026-01-31T10:30:00Z', changed_by: 'System' },
+      { status: 'assigned', changed_at: '2026-01-31T11:00:00Z', changed_by: 'John Manager' },
+      { status: 'in_production', changed_at: '2026-01-31T13:00:00Z', changed_by: 'Victor Tech' },
+      { status: 'ready', changed_at: '2026-02-01T15:00:00Z', changed_by: 'Victor Tech', note: 'All 10 signs completed' }
     ],
     notes: '',
-    due_date: '2024-01-25',
-    production_start_date: '2024-01-21T13:00:00Z',
-    production_ready_date: '2024-01-22T15:00:00Z',
+    due_date: '2026-02-25',
+    production_start_date: '2026-01-31T13:00:00Z',
+    production_ready_date: '2026-02-01T15:00:00Z',
     delivery_date: null,
-    created_at: '2024-01-21T10:30:00Z',
-    updated_at: '2024-01-22T15:00:00Z',
+    created_at: '2026-01-31T10:30:00Z',
+    updated_at: '2026-02-01T15:00:00Z',
   },
 
   // Order 3 items
@@ -110,15 +110,15 @@ export const orderItems: OrderItem[] = [
     assigned_printshop: 'in-house',
     status: 'ready',
     status_history: [
-      { status: 'new', changed_at: '2024-01-22T08:15:00Z', changed_by: 'System' }
+      { status: 'new', changed_at: '2026-02-01T08:15:00Z', changed_by: 'System' }
     ],
     notes: '',
-    due_date: '2024-01-26',
-    production_start_date: '2024-01-22T09:00:00Z',
-    production_ready_date: '2024-01-23T11:00:00Z',
+    due_date: '2026-02-26',
+    production_start_date: '2026-02-01T09:00:00Z',
+    production_ready_date: '2026-02-02T11:00:00Z',
     delivery_date: null,
-    created_at: '2024-01-22T08:15:00Z',
-    updated_at: '2024-01-23T11:00:00Z',
+    created_at: '2026-02-01T08:15:00Z',
+    updated_at: '2026-02-02T11:00:00Z',
   },
 
   // Order 4 items (OVERDUE - due date in the past, still on hold)
@@ -132,15 +132,15 @@ export const orderItems: OrderItem[] = [
     assigned_printshop: 'in-house',
     status: 'on_hold',
     status_history: [
-      { status: 'new', changed_at: '2024-01-22T11:00:00Z', changed_by: 'System' }
+      { status: 'new', changed_at: '2026-02-01T11:00:00Z', changed_by: 'System' }
     ],
     notes: 'Waiting for customer approval on colors',
-    due_date: '2024-01-20', // Overdue!
-    production_start_date: '2024-01-22T11:30:00Z',
+    due_date: '2026-01-30', // Overdue!
+    production_start_date: '2026-02-01T11:30:00Z',
     production_ready_date: null,
     delivery_date: null,
-    created_at: '2024-01-22T11:00:00Z',
-    updated_at: '2024-01-23T09:30:00Z',
+    created_at: '2026-02-01T11:00:00Z',
+    updated_at: '2026-02-02T09:30:00Z',
   },
   {
     id: 'item-7',
@@ -152,15 +152,15 @@ export const orderItems: OrderItem[] = [
     assigned_printshop: 'in-house',
     status: 'on_hold',
     status_history: [
-      { status: 'new', changed_at: '2024-01-22T11:00:00Z', changed_by: 'System' }
+      { status: 'new', changed_at: '2026-02-01T11:00:00Z', changed_by: 'System' }
     ],
     notes: 'Same approval needed',
-    due_date: '2024-01-20', // Overdue!
-    production_start_date: '2024-01-22T11:30:00Z',
+    due_date: '2026-01-30', // Overdue!
+    production_start_date: '2026-02-01T11:30:00Z',
     production_ready_date: null,
     delivery_date: null,
-    created_at: '2024-01-22T11:00:00Z',
-    updated_at: '2024-01-23T09:30:00Z',
+    created_at: '2026-02-01T11:00:00Z',
+    updated_at: '2026-02-02T09:30:00Z',
   },
 
   // Order 5 items
@@ -174,15 +174,15 @@ export const orderItems: OrderItem[] = [
     assigned_printshop: 'victor',
     status: 'assigned',
     status_history: [
-      { status: 'new', changed_at: '2024-01-23T09:00:00Z', changed_by: 'System' }
+      { status: 'new', changed_at: '2026-02-02T09:00:00Z', changed_by: 'System' }
     ],
     notes: '',
-    due_date: '2024-01-28',
+    due_date: '2026-02-28',
     production_start_date: null,
     production_ready_date: null,
     delivery_date: null,
-    created_at: '2024-01-23T09:00:00Z',
-    updated_at: '2024-01-23T09:00:00Z',
+    created_at: '2026-02-02T09:00:00Z',
+    updated_at: '2026-02-02T09:00:00Z',
   },
 
   // Order 6 items (new, no dates set yet)
@@ -196,15 +196,15 @@ export const orderItems: OrderItem[] = [
     assigned_printshop: null,
     status: 'new',
     status_history: [
-      { status: 'new', changed_at: '2024-01-23T13:00:00Z', changed_by: 'System' }
+      { status: 'new', changed_at: '2026-02-02T13:00:00Z', changed_by: 'System' }
     ],
     notes: '',
-    due_date: '2024-01-30',
+    due_date: '2026-02-30',
     production_start_date: null,
     production_ready_date: null,
     delivery_date: null,
-    created_at: '2024-01-23T13:00:00Z',
-    updated_at: '2024-01-23T13:00:00Z',
+    created_at: '2026-02-02T13:00:00Z',
+    updated_at: '2026-02-02T13:00:00Z',
   },
   {
     id: 'item-10',
@@ -216,15 +216,15 @@ export const orderItems: OrderItem[] = [
     assigned_printshop: null,
     status: 'new',
     status_history: [
-      { status: 'new', changed_at: '2024-01-23T13:00:00Z', changed_by: 'System' }
+      { status: 'new', changed_at: '2026-02-02T13:00:00Z', changed_by: 'System' }
     ],
     notes: '',
-    due_date: '2024-01-30',
+    due_date: '2026-02-30',
     production_start_date: null,
     production_ready_date: null,
     delivery_date: null,
-    created_at: '2024-01-23T13:00:00Z',
-    updated_at: '2024-01-23T13:00:00Z',
+    created_at: '2026-02-02T13:00:00Z',
+    updated_at: '2026-02-02T13:00:00Z',
   },
 
   // Order 7 items
@@ -238,15 +238,15 @@ export const orderItems: OrderItem[] = [
     assigned_printshop: 'victor',
     status: 'picked_up',
     status_history: [
-      { status: 'new', changed_at: '2024-01-19T14:00:00Z', changed_by: 'System' }
+      { status: 'new', changed_at: '2026-01-29T14:00:00Z', changed_by: 'System' }
     ],
     notes: 'Customer picked up at shop',
-    due_date: '2024-01-21',
-    production_start_date: '2024-01-19T15:00:00Z',
-    production_ready_date: '2024-01-20T17:00:00Z',
-    delivery_date: '2024-01-21T10:00:00Z',
-    created_at: '2024-01-19T14:00:00Z',
-    updated_at: '2024-01-21T10:00:00Z',
+    due_date: '2026-01-31',
+    production_start_date: '2026-01-29T15:00:00Z',
+    production_ready_date: '2026-01-30T17:00:00Z',
+    delivery_date: '2026-01-31T10:00:00Z',
+    created_at: '2026-01-29T14:00:00Z',
+    updated_at: '2026-01-31T10:00:00Z',
   },
 
   // Order 8 items
@@ -260,15 +260,15 @@ export const orderItems: OrderItem[] = [
     assigned_printshop: 'in-house',
     status: 'out_for_delivery',
     status_history: [
-      { status: 'new', changed_at: '2024-01-21T15:00:00Z', changed_by: 'System' }
+      { status: 'new', changed_at: '2026-01-31T15:00:00Z', changed_by: 'System' }
     ],
     notes: '',
-    due_date: '2024-01-24',
-    production_start_date: '2024-01-22T08:00:00Z',
-    production_ready_date: '2024-01-23T13:00:00Z',
+    due_date: '2026-02-24',
+    production_start_date: '2026-02-01T08:00:00Z',
+    production_ready_date: '2026-02-02T13:00:00Z',
     delivery_date: null,
-    created_at: '2024-01-21T15:00:00Z',
-    updated_at: '2024-01-23T14:00:00Z',
+    created_at: '2026-01-31T15:00:00Z',
+    updated_at: '2026-02-02T14:00:00Z',
   },
 
   // Order 9 items
@@ -282,15 +282,15 @@ export const orderItems: OrderItem[] = [
     assigned_printshop: 'in-house',
     status: 'in_production',
     status_history: [
-      { status: 'new', changed_at: '2024-01-22T16:00:00Z', changed_by: 'System' }
+      { status: 'new', changed_at: '2026-02-01T16:00:00Z', changed_by: 'System' }
     ],
     notes: '',
-    due_date: '2024-01-27',
-    production_start_date: '2024-01-23T09:00:00Z',
+    due_date: '2026-02-27',
+    production_start_date: '2026-02-02T09:00:00Z',
     production_ready_date: null,
     delivery_date: null,
-    created_at: '2024-01-22T16:00:00Z',
-    updated_at: '2024-01-23T10:00:00Z',
+    created_at: '2026-02-01T16:00:00Z',
+    updated_at: '2026-02-02T10:00:00Z',
   },
   {
     id: 'item-14',
@@ -302,15 +302,15 @@ export const orderItems: OrderItem[] = [
     assigned_printshop: 'in-house',
     status: 'assigned',
     status_history: [
-      { status: 'new', changed_at: '2024-01-22T16:00:00Z', changed_by: 'System' }
+      { status: 'new', changed_at: '2026-02-01T16:00:00Z', changed_by: 'System' }
     ],
     notes: '',
-    due_date: '2024-01-27',
+    due_date: '2026-02-27',
     production_start_date: null,
     production_ready_date: null,
     delivery_date: null,
-    created_at: '2024-01-22T16:00:00Z',
-    updated_at: '2024-01-22T16:00:00Z',
+    created_at: '2026-02-01T16:00:00Z',
+    updated_at: '2026-02-01T16:00:00Z',
   },
 
   // Order 10 items
@@ -324,14 +324,14 @@ export const orderItems: OrderItem[] = [
     assigned_printshop: 'victor',
     status: 'canceled',
     status_history: [
-      { status: 'new', changed_at: '2024-01-20T12:00:00Z', changed_by: 'System' }
+      { status: 'new', changed_at: '2026-01-30T12:00:00Z', changed_by: 'System' }
     ],
     notes: 'Customer requested cancellation',
-    due_date: '2024-01-23',
-    production_start_date: '2024-01-20T13:00:00Z',
+    due_date: '2026-02-02',
+    production_start_date: '2026-01-30T13:00:00Z',
     production_ready_date: null,
     delivery_date: null,
-    created_at: '2024-01-20T12:00:00Z',
-    updated_at: '2024-01-21T09:00:00Z',
+    created_at: '2026-01-30T12:00:00Z',
+    updated_at: '2026-01-31T09:00:00Z',
   },
 ]

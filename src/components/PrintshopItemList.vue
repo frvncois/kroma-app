@@ -93,9 +93,9 @@ const isTerminalStatus = (status: ItemStatus) => {
 </script>
 
 <template>
-  <div class="w-full border rounded-xl">
+  <div class="w-full bg-muted/30 rounded-2xl border pb-2">
     <!-- Header Row -->
-    <div class="grid grid-cols-[1fr_1fr_1fr_minmax(200px,auto)] gap-4 text-xs font-medium text-background tracking-wider rounded-t-xl py-2 px-4 bg-foreground">
+    <div class="grid grid-cols-[1fr_1fr_1fr_minmax(200px,auto)] gap-4 text-xs font-medium text-background tracking-wider rounded-t-xl py-3 px-4 bg-foreground">
       <div>Item</div>
       <div>Details</div>
       <div>Timeline</div>
@@ -103,7 +103,7 @@ const isTerminalStatus = (status: ItemStatus) => {
     </div>
 
     <!-- Empty State -->
-    <div v-if="items.length === 0" class="flex flex-col items-center justify-center py-16 text-muted-foreground">
+    <div v-if="items.length === 0" class="flex flex-col items-center justify-center py-16 text-muted-foreground m-2">
       <Package class="h-12 w-12 mb-4 opacity-50" />
       <p class="text-sm">No items in your queue</p>
     </div>
@@ -112,9 +112,12 @@ const isTerminalStatus = (status: ItemStatus) => {
     <div
       v-for="item in items"
       :key="item.id"
-      class="grid grid-cols-[1fr_1fr_1fr_minmax(200px,auto)] gap-4 border-t hover:bg-accent/50 transition-colors cursor-pointer pt-3 pb-4 px-4"
-      @click="handleRowClick(item.id, $event)"
+      class="m-2"
     >
+      <div
+        class="grid grid-cols-[1fr_1fr_1fr_minmax(200px,auto)] gap-4 rounded-xl border bg-background/50 hover:bg-background transition-colors cursor-pointer pt-3 pb-4 px-4"
+        @click="handleRowClick(item.id, $event)"
+      >
       <!-- Column 1: Item -->
       <div class="min-w-0">
         <button
@@ -197,6 +200,7 @@ const isTerminalStatus = (status: ItemStatus) => {
           </div>
         </div>
       </div>
+    </div>
     </div>
   </div>
 </template>

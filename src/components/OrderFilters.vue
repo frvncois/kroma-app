@@ -36,6 +36,7 @@ interface Props {
   orderBy?: string
   kanbanColumnsFilter?: string[]
   searchQuery?: string
+  showSearch?: boolean
 
   // Kanban search results
   kanbanSearchResults?: OrderItemWithDetails[]
@@ -51,6 +52,7 @@ const props = withDefaults(defineProps<Props>(), {
   orderBy: () => 'newest',
   kanbanColumnsFilter: () => ['all'],
   searchQuery: () => '',
+  showSearch: true,
   kanbanSearchResults: () => [],
 })
 
@@ -111,7 +113,7 @@ const getFilterValue = (key: string): string | string[] => {
     </div>
 
     <!-- Search Input with Results Dropdown -->
-    <div class="relative flex-1">
+    <div v-if="showSearch" class="relative flex-1">
       <Input
         :model-value="searchQuery"
         @update:model-value="emit('update:searchQuery', $event)"

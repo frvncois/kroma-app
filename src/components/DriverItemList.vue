@@ -2,19 +2,14 @@
 import { computed } from 'vue'
 import type { OrderWithDetails } from '@/composables/useOrders'
 import { usePrintshops } from '@/composables/usePrintshops'
-import { Truck, CheckCircle2 } from 'lucide-vue-next'
-import Checkbox from '@/components/ui/Checkbox.vue'
+import { Truck } from 'lucide-vue-next'
 
 interface Props {
   orders: OrderWithDetails[]
-  selectedIds: Set<string>
 }
 
 interface Emits {
-  (e: 'toggle-select', orderId: string): void
   (e: 'order-click', orderId: string): void
-  (e: 'select-all'): void
-  (e: 'deselect-all'): void
 }
 
 const props = defineProps<Props>()
@@ -22,17 +17,43 @@ const emit = defineEmits<Emits>()
 
 const { getPrintshopById } = usePrintshops()
 
-const allSelected = computed(() => {
-  return props.orders.length > 0 && props.orders.every(o => props.selectedIds.has(o.id))
-})
+// Group orders by urgency
+const groupedOrders = computed(() => {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const tomorrow = new Date(today.getTime() + 86400000)
 
-const handleSelectAll = () => {
-  if (allSelected.value) {
-    emit('deselect-all')
-  } else {
-    emit('select-all')
+  const overdue: OrderWithDetails[] = []
+  const dueToday: OrderWithDetails[] = []
+  const dueTomorrow: OrderWithDetails[] = []
+  const upcoming: OrderWithDetails[] = []
+
+  for (const order of props.orders) {
+    // Find earliest due date among deliverable items
+    const earliestDue = order.items
+      .filter(i => i.status === 'ready' || i.status === 'out_for_delivery')
+      .map(i => i.due_date)
+      .filter(Boolean)
+      .sort()[0]
+
+    if (!earliestDue) {
+      upcoming.push(order)
+    } else {
+      const dueDate = new Date(earliestDue)
+      if (dueDate < today) overdue.push(order)
+      else if (dueDate < tomorrow) dueToday.push(order)
+      else if (dueDate < new Date(tomorrow.getTime() + 86400000)) dueTomorrow.push(order)
+      else upcoming.push(order)
+    }
   }
-}
+
+  return [
+    { label: '🔴 Overdue', orders: overdue, class: 'text-red-600' },
+    { label: '🟠 Due Today', orders: dueToday, class: 'text-orange-600' },
+    { label: '🟡 Due Tomorrow', orders: dueTomorrow, class: 'text-amber-600' },
+    { label: '⚪ Upcoming & Unscheduled', orders: upcoming, class: 'text-muted-foreground' },
+  ].filter(g => g.orders.length > 0)
+})
 
 const getPickupShops = (order: OrderWithDetails): string => {
   // Only consider items ready for delivery
@@ -75,26 +96,12 @@ const getItemsStatus = (order: OrderWithDetails): { text: string; class: string 
     return { text: 'Mixed status', class: 'text-muted-foreground' }
   }
 }
-
-const handleRowClick = (orderId: string, event: Event) => {
-  const target = event.target as HTMLElement
-  if (target.closest('.checkbox-cell')) {
-    return
-  }
-  emit('order-click', orderId)
-}
 </script>
 
 <template>
-  <div class="w-full">
-    <!-- Header Row -->
-    <div class="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-4 text-xs font-medium text-muted-foreground uppercase tracking-wider py-2 px-4 border-b bg-muted/30 items-center">
-      <div class="checkbox-cell flex items-center justify-center">
-        <Checkbox
-          :model-value="allSelected"
-          @update:model-value="handleSelectAll"
-        />
-      </div>
+  <div class="w-full bg-muted/30 rounded-2xl border pb-2">
+    <!-- Column Header -->
+    <div class="grid grid-cols-[1fr_1fr_1fr_auto] gap-4 text-xs font-medium text-background uppercase tracking-wider py-3 px-4 bg-foreground rounded-t-xl items-center">
       <div>Order</div>
       <div>Customer</div>
       <div>Pickup From</div>
@@ -102,64 +109,44 @@ const handleRowClick = (orderId: string, event: Event) => {
     </div>
 
     <!-- Empty State -->
-    <div v-if="orders.length === 0" class="flex flex-col items-center justify-center py-16 text-muted-foreground">
+    <div v-if="orders.length === 0" class="flex flex-col items-center justify-center py-16 text-muted-foreground m-2">
       <Truck class="h-12 w-12 mb-4 opacity-50" />
       <p class="text-sm">No orders ready for delivery</p>
     </div>
 
-    <!-- Order Rows -->
-    <div
-      v-for="order in orders"
-      :key="order.id"
-      :class="[
-        'grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-4 border-b hover:bg-accent/50 transition-colors cursor-pointer py-3 px-4 items-center',
-        selectedIds.has(order.id) ? 'bg-primary/5 border-primary/30' : ''
-      ]"
-      @click="handleRowClick(order.id, $event)"
-    >
-      <!-- Checkbox -->
-      <div class="checkbox-cell flex items-center justify-center" @click.stop>
-        <Checkbox
-          :model-value="selectedIds.has(order.id)"
-          @update:model-value="emit('toggle-select', order.id)"
-        />
-      </div>
+    <!-- Grouped Sections -->
+    <template v-for="group in groupedOrders" :key="group.label">
 
-      <!-- Column 1: Order -->
-      <div class="min-w-0">
-        <div class="text-sm font-medium">
-          #{{ order.external_id || order.id.slice(0, 8) }}
+      <div
+        v-for="order in group.orders"
+        :key="order.id"
+        class="m-2"
+      >
+        <div
+          class="grid grid-cols-[1fr_1fr_1fr_auto] gap-4 rounded-xl border bg-background/50 hover:bg-background transition-colors cursor-pointer py-3 px-4 items-center"
+          @click="emit('order-click', order.id)"
+        >
+        <!-- Order -->
+        <div class="min-w-0">
+          <div class="text-sm font-medium">#{{ order.external_id || order.id.slice(0, 8) }}</div>
+          <div class="text-xs text-muted-foreground truncate">{{ order.customer.company || order.customer.name }}</div>
         </div>
-        <div class="text-xs text-muted-foreground truncate">
-          {{ order.customer.company || order.customer.name }}
+        <!-- Customer -->
+        <div class="min-w-0">
+          <div class="text-sm">{{ order.customer.name }}</div>
+          <div class="text-xs text-muted-foreground truncate">{{ order.customer.address }}</div>
         </div>
-      </div>
-
-      <!-- Column 2: Customer -->
-      <div class="min-w-0">
-        <div class="text-sm">{{ order.customer.name }}</div>
-        <div class="text-xs text-muted-foreground truncate">
-          {{ order.customer.address }}
+        <!-- Pickup From -->
+        <div class="min-w-0">
+          <div class="text-sm">{{ getPickupShops(order) }}</div>
         </div>
-      </div>
-
-      <!-- Column 3: Pickup From -->
-      <div class="min-w-0">
-        <div class="text-sm">{{ getPickupShops(order) }}</div>
-        <div class="text-xs text-muted-foreground truncate">
-          {{ getShopAddress(order) }}
+        <!-- Items -->
+        <div class="text-right pr-4">
+          <div class="text-sm">{{ getDeliverableItemsCount(order) }} item{{ getDeliverableItemsCount(order) !== 1 ? 's' : '' }}</div>
+          <div :class="['text-xs', getItemsStatus(order).class]">{{ getItemsStatus(order).text }}</div>
         </div>
-      </div>
-
-      <!-- Column 4: Items -->
-      <div class="text-right pr-4">
-        <div class="text-sm">
-          {{ getDeliverableItemsCount(order) }} item{{ getDeliverableItemsCount(order) !== 1 ? 's' : '' }}
-        </div>
-        <div :class="['text-xs', getItemsStatus(order).class]">
-          {{ getItemsStatus(order).text }}
         </div>
       </div>
-    </div>
+    </template>
   </div>
 </template>

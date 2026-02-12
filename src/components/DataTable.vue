@@ -18,14 +18,21 @@ import {
 import { ref } from 'vue'
 import { valueUpdater } from '@/lib/utils'
 import Button from '@/components/ui/Button.vue'
-import Input from '@/components/ui/Input.vue'
+import { PanelRightOpen } from 'lucide-vue-next'
 
 const props = defineProps<{
   columns: ColumnDef<TData, TValue>[]
-  data: TData[] 
+  data: TData[]
   searchKey?: string
   searchPlaceholder?: string
   gridTemplateColumns?: string
+  showActionButton?: boolean
+  rowClass?: (row: TData) => string
+}>()
+
+const emit = defineEmits<{
+  'row-click': [row: TData]
+  'action-click': [row: TData]
 }>()
 
 const sorting = ref<SortingState>([])
@@ -81,7 +88,7 @@ const table = useVueTable({
         v-for="headerGroup in table.getHeaderGroups()"
         :key="headerGroup.id"
         class="grid gap-2 bg-foreground rounded-t-xl"
-        :style="{ gridTemplateColumns: gridTemplateColumns || `repeat(${columns.length}, minmax(0, 1fr))` }"
+        :style="{ gridTemplateColumns: showActionButton ? `${gridTemplateColumns || `repeat(${columns.length}, minmax(0, 1fr))`} auto` : gridTemplateColumns || `repeat(${columns.length}, minmax(0, 1fr))` }"
       >
         <div
           v-for="header in headerGroup.headers"
@@ -94,6 +101,11 @@ const table = useVueTable({
             :props="header.getContext()"
           />
         </div>
+
+        <!-- Action Column Header -->
+        <div v-if="showActionButton" class="flex items-center justify-center px-2 py-3 text-xs font-medium text-background">
+          Actions
+        </div>
       </div>
 
       <!-- Data Rows -->
@@ -101,20 +113,42 @@ const table = useVueTable({
         <div
           v-for="row in table.getRowModel().rows"
           :key="row.id"
-          class="space-y-0 px-2"
+          :class="[
+            'space-y-0 m-2',
+            rowClass ? rowClass(row.original) + ' rounded-xl' : ''
+          ]"
         >
           <!-- Main Row -->
           <div
-            class="grid gap-2 rounded-xl border bg-card transition-colors hover:bg-accent/10"
-            :class="{ 'rounded-b-none': row.getIsExpanded() }"
-            :style="{ gridTemplateColumns: gridTemplateColumns || `repeat(${columns.length}, minmax(0, 1fr))` }"
+            class="grid gap-2 rounded-xl border transition-colors cursor-pointer"
+            :class="{
+              'rounded-b-none': row.getIsExpanded(),
+              'bg-background': row.getIsExpanded(),
+              'bg-background/50 hover:bg-background': !row.getIsExpanded()
+            }"
+            :style="{ gridTemplateColumns: showActionButton ? `${gridTemplateColumns || `repeat(${columns.length}, minmax(0, 1fr))`} auto` : gridTemplateColumns || `repeat(${columns.length}, minmax(0, 1fr))` }"
+            @click="$slots['expanded-row'] ? row.toggleExpanded() : emit('row-click', row.original)"
           >
             <div
-              v-for="cell in row.getVisibleCells()"
+              v-for="(cell, index) in row.getVisibleCells()"
               :key="cell.id"
-              class="flex items-center px-2 py-3 text-sm"
+              :class="[
+                'flex items-center px-2 py-2 text-sm',
+                index === row.getVisibleCells().length - 1 ? 'justify-end' : ''
+              ]"
             >
               <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
+            </div>
+
+            <!-- Action Button -->
+            <div v-if="showActionButton" class="flex items-center justify-center px-2 py-3">
+              <Button
+                variant="outline"
+                size="sm"
+                @click.stop="emit('action-click', row.original)"
+              >
+                <PanelRightOpen class="h-4 w-4" />
+              </Button>
             </div>
           </div>
 

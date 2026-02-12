@@ -2,8 +2,10 @@
 import { ref, computed, watch } from 'vue'
 import { useOrders } from '@/composables/useOrders'
 import { usePrintshops } from '@/composables/usePrintshops'
+import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import { formatStatus as libFormatStatus } from '@/lib/formatters'
+import { getStatusVariant } from '@/lib/variants'
 import type { PaymentStatus, PaymentMethod, ItemStatus, OrderNote, NoteDepartment } from '@/types'
 import Sheet from '@/components/ui/Sheet.vue'
 import Card from '@/components/ui/Card.vue'
@@ -11,7 +13,7 @@ import CardContent from '@/components/ui/CardContent.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Textarea from '@/components/ui/Textarea.vue'
 import Label from '@/components/ui/Label.vue'
-import DateInput from '@/components/ui/DateInput.vue'
+import DatePicker from '@/components/ui/DatePicker.vue'
 import Button from '@/components/ui/Button.vue'
 import FilterSelect from '@/components/ui/FilterSelect.vue'
 import ItemStatusCombobox from '@/components/ItemStatusCombobox.vue'
@@ -53,8 +55,54 @@ const {
 } = useOrders()
 const { getPrintshops, getPrintshopName } = usePrintshops()
 const { toast } = useToast()
+const authStore = useAuthStore()
 
 const order = computed(() => (props.orderId ? getOrderById(props.orderId) : null))
+
+// Filtered items based on user role
+const filteredItems = computed(() => {
+  if (!order.value) return []
+
+  // If printshop manager, show only items assigned to their shops
+  if (authStore.isPrintshopManager) {
+    return order.value.items.filter(item =>
+      item.assigned_printshop && authStore.userShops.includes(item.assigned_printshop)
+    )
+  }
+
+  // For other roles, show all items
+  return order.value.items
+})
+
+// Filtered files based on filtered items
+const filteredFiles = computed(() => {
+  const itemNames = new Set(filteredItems.value.map(item => item.product_name))
+  return files.value.filter(file => itemNames.has(file.item_name))
+})
+
+// Filtered notes based on department and item reference
+const filteredNotes = computed(() => {
+  // Allowed departments for printshop managers and drivers
+  const allowedDepartments: NoteDepartment[] = ['everyone', 'printshop', 'delivery']
+
+  // Item names from filtered items
+  const itemNames = new Set(filteredItems.value.map(item => item.product_name))
+
+  return notes.value.filter(note => {
+    // Check if note is for an allowed department
+    const hasAllowedDepartment = note.departments.some(dept =>
+      allowedDepartments.includes(dept)
+    )
+
+    if (!hasAllowedDepartment) return false
+
+    // If note has no item reference, include it
+    if (!note.item_reference) return true
+
+    // If note has item reference, check if it's in our filtered items
+    return itemNames.has(note.item_reference)
+  })
+})
 
 // Editable state
 const paymentStatus = ref<PaymentStatus>('unpaid')
@@ -174,31 +222,6 @@ const formatDate = (dateString: string): string => {
 
 const formatCurrency = (amount: number): string => {
   return `$${amount.toFixed(2)}`
-}
-
-const getStatusVariant = (
-  status: ItemStatus
-): 'default' | 'secondary' | 'success' | 'warning' | 'info' | 'destructive' => {
-  switch (status) {
-    case 'new':
-      return 'info'
-    case 'assigned':
-    case 'in_production':
-      return 'warning'
-    case 'on_hold':
-      return 'secondary'
-    case 'ready':
-      return 'info'
-    case 'out_for_delivery':
-      return 'warning'
-    case 'delivered':
-    case 'picked_up':
-      return 'success'
-    case 'canceled':
-      return 'destructive'
-    default:
-      return 'default'
-  }
 }
 
 const formatStatus = (status: ItemStatus): string => {
@@ -397,12 +420,14 @@ const departmentOptions = [
       <p class="text-muted-foreground">Order not found</p>
     </div>
 
-    <div v-else class="space-y-6 p-6">
+    <div v-else class="space-y-10 p-10">
       <!-- Customer & Order Info (Combined) -->
       <div>
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-semibold flex items-center gap-2">
-            <User class="h-5 w-5" />
+            <div class="p-2 bg-accent rounded-lg">
+              <User class="h-4 w-4" />
+            </div>
             Customer & Order Information
           </h3>
           <Badge :variant="order.delivery_method === 'delivery' ? 'default' : 'secondary'">
@@ -505,12 +530,14 @@ const departmentOptions = [
       <!-- Items Section -->
       <div>
         <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-          <Package class="h-5 w-5" />
-          Order Items ({{ order.items.length }})
+          <div class="p-2 bg-accent rounded-lg">
+            <Package class="h-4 w-4" />
+          </div>
+          Order Items ({{ filteredItems.length }})
         </h3>
-        <div class="space-y-3">
+        <div class="space-y-2">
           <Card
-            v-for="item in order.items"
+            v-for="item in filteredItems"
             :key="item.id"
             class="cursor-pointer"
             @click="toggleItemExpanded(item.id)"
@@ -570,36 +597,8 @@ const departmentOptions = [
                   @update:due-date="handleDueDateChange"
                 />
 
-                <!-- Production Date Fields (Read-only) -->
-                <div class="space-y-3 rounded-lg border bg-muted/30 p-3">
-                  <div class="text-sm font-medium">Production Dates</div>
-                  <div class="grid gap-3 md:grid-cols-2">
-                    <div>
-                      <Label class="text-xs text-muted-foreground">Production Start</Label>
-                      <div class="mt-1 flex h-9 items-center rounded-md border bg-muted px-3 text-sm">
-                        {{
-                          item.production_start_date
-                            ? formatDateDisplay(item.production_start_date)
-                            : 'Not started'
-                        }}
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label class="text-xs text-muted-foreground">Production Ready</Label>
-                      <div class="mt-1 flex h-9 items-center rounded-md border bg-muted px-3 text-sm">
-                        {{
-                          item.production_ready_date
-                            ? formatDateDisplay(item.production_ready_date)
-                            : 'Not ready'
-                        }}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
                 <!-- Status History -->
-                <div v-if="item.status_history && item.status_history.length > 0" class="space-y-2 rounded-lg border bg-muted/30 p-3">
+                <div v-if="item.status_history && item.status_history.length > 0" class="space-y-2">
                   <div class="text-sm font-medium">Status History</div>
                   <div class="space-y-2">
                     <div
@@ -607,7 +606,6 @@ const departmentOptions = [
                       :key="index"
                       class="flex items-start gap-3 text-xs"
                     >
-                      <div class="mt-0.5 h-2 w-2 rounded-full bg-primary"></div>
                       <div class="flex-1">
                         <div class="flex items-center gap-2">
                           <Badge :variant="getStatusVariant(history.status)" class="text-xs">
@@ -634,10 +632,12 @@ const departmentOptions = [
       <!-- Files Section -->
       <div v-if="showFiles">
         <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-          <Paperclip class="h-5 w-5" />
-          Files ({{ files.length }})
+          <div class="p-2 bg-accent rounded-lg">
+            <Paperclip class="h-4 w-4" />
+          </div>
+          Files ({{ filteredFiles.length }})
         </h3>
-        <div v-if="files.length === 0">
+        <div v-if="filteredFiles.length === 0">
           <Card>
             <CardContent class="p-8">
               <div class="flex items-center justify-center text-sm text-muted-foreground">
@@ -648,7 +648,7 @@ const departmentOptions = [
         </div>
         <div v-else class="space-y-2">
           <Card
-            v-for="file in files"
+            v-for="file in filteredFiles"
             :key="file.id"
             class="hover:bg-accent/50 transition-colors"
           >
@@ -682,7 +682,7 @@ const departmentOptions = [
 
       <!-- Notes Section -->
       <NotesSection
-        :notes="notes"
+        :notes="filteredNotes"
         :item-options="itemReferenceOptions"
         :department-options="departmentOptions"
         @add-note="handleAddNote"

@@ -46,8 +46,14 @@ const columns = computed(() => createColumns({
   onOpenDetail: (orderId: string) => openOrderDetail(orderId),
 }))
 
-// Activities state (use the store's activities)
-const activities = computed(() => activityStore.allActivities)
+// Row class for unassigned items
+const getOrderRowClass = (order: any) => {
+  const hasUnassignedItems = order.items?.some((item: any) => !item.assigned_printshop || item.status === 'new')
+  return hasUnassignedItems ? 'outline outline-4 outline-blue-600/10 border border-blue-600' : ''
+}
+
+// Activities state (use the store's role-scoped activities)
+const activities = computed(() => activityStore.getActivitiesForRole())
 
 // Sheet state
 const selectedOrderId = ref<string | null>(null)
@@ -86,6 +92,14 @@ const openOrderDetail = (orderId: string, side: 'left' | 'right' = 'right') => {
   selectedOrderId.value = orderId
   orderSheetSide.value = side
   isSheetOpen.value = true
+}
+
+const handleKanbanItemClick = (itemId: string) => {
+  // Find the item and open its order
+  const item = allItems.value.find(i => i.id === itemId)
+  if (item) {
+    openOrderDetail(item.order_id)
+  }
 }
 
 // Handle openOrder query param from command palette
@@ -400,7 +414,7 @@ const kanbanFilterConfigs = [
 <template>
   <div class="h-full mr-80 w-full">
     <!-- Main Content -->
-    <div class="flex h-full flex-col space-y-10 p-10">
+    <div class="flex h-full flex-col space-y-10 p-10 pt-24">
       <!-- Row 1: Header -->
       <div class="flex items-center justify-between flex-shrink-0">
         <h1 class="text-3xl font-medium">General Manager</h1>
@@ -438,6 +452,7 @@ const kanbanFilterConfigs = [
           search-key="external_id"
           search-placeholder="Search orders..."
           grid-template-columns="0.25fr 1fr 1fr 1fr 0.5fr 0.5fr 0.5fr 0.5fr 0.5fr 0.5fr 0.25fr"
+          :row-class="getOrderRowClass"
         >
           <template #expanded-row="{ row }">
             <OrderExpandedRow
@@ -458,7 +473,7 @@ const kanbanFilterConfigs = [
         :visible-columns="visibleKanbanColumns"
         :items="filteredItems"
         @item-drop="handleItemDrop"
-        @item-click="openOrderDetail"
+        @item-click="handleKanbanItemClick"
       />
     </div>
     <!-- End Main Content -->

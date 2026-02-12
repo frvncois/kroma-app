@@ -10,7 +10,7 @@ import FilterSelect from '@/components/ui/FilterSelect.vue'
 import Textarea from '@/components/ui/Textarea.vue'
 import Label from '@/components/ui/Label.vue'
 import Badge from '@/components/ui/Badge.vue'
-import DateInput from '@/components/ui/DateInput.vue'
+import DatePicker from '@/components/ui/DatePicker.vue'
 import { Truck, Paperclip, MessageSquare, Edit2, Trash2 } from 'lucide-vue-next'
 
 interface Props {
@@ -274,7 +274,9 @@ watch(() => props.open, (newVal) => {
       <div>
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-semibold flex items-center gap-2">
-            <Truck class="h-5 w-5" />
+            <div class="p-2 bg-accent rounded-lg">
+              <Truck class="h-4 w-4" />
+            </div>
             Task Information
           </h3>
           <Badge :variant="getPriorityVariant(taskPriority)">
@@ -350,7 +352,7 @@ watch(() => props.open, (newVal) => {
               <!-- To Be Completed By -->
               <div>
                 <Label class="text-xs text-muted-foreground mb-1 block">To Be Completed By *</Label>
-                <DateInput v-model="completeBy" />
+                <DatePicker v-model="completeBy" />
               </div>
             </div>
           </CardContent>
@@ -360,7 +362,9 @@ watch(() => props.open, (newVal) => {
       <!-- Files -->
       <div>
         <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-          <Paperclip class="h-5 w-5" />
+          <div class="p-2 bg-accent rounded-lg">
+            <Paperclip class="h-4 w-4" />
+          </div>
           Files
         </h3>
         <Card>
@@ -375,7 +379,9 @@ watch(() => props.open, (newVal) => {
       <!-- Notes Section -->
       <div>
         <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-          <MessageSquare class="h-5 w-5" />
+          <div class="p-2 bg-accent rounded-lg">
+            <MessageSquare class="h-4 w-4" />
+          </div>
           Notes ({{ notes.length }})
         </h3>
 

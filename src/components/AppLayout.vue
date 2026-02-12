@@ -33,6 +33,7 @@ const navItems: NavItem[] = [
 
   // Driver routes
   { to: '/driver/deliveries', label: 'Deliveries', roles: ['driver'] },
+  { to: '/driver/history', label: 'History', roles: ['driver'] },
 ]
 
 const visibleNavItems = computed(() => {
@@ -61,7 +62,7 @@ onClickOutside(mobileMenuRef, () => {
 <template>
   <div class="flex min-h-screen flex-col bg-background">
     <!-- Header -->
-    <header class="sticky top-0 z-50 w-full border-b bg-background pl-10 pr-2">
+    <header class="fixed top-0 z-50 w-full border-b bg-background pl-10 pr-2">
       <div class="mx-auto flex h-16 items-center justify-between">
         <!-- Left: Logo + Navigation (Desktop) -->
         <div class="flex gap-8 items-center">
