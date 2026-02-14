@@ -17,16 +17,21 @@ export function useOrderItems() {
   const customerStore = useCustomerStore()
 
   const itemsWithDetails = computed<OrderItemWithDetails[]>(() => {
-    return orderStore.orderItems.map((item) => {
-      const order = orderStore.orders.find((o) => o.id === item.order_id)!
-      const customer = customerStore.getCustomerById(order.customer_id)!
+    return orderStore.orderItems
+      .map((item) => {
+        const order = orderStore.orders.find((o) => o.id === item.order_id)
+        if (!order) return null // Skip if order not loaded yet
 
-      return {
-        ...item,
-        order,
-        customer,
-      }
-    })
+        const customer = customerStore.getCustomerById(order.customer_id)
+        if (!customer) return null // Skip if customer not loaded yet
+
+        return {
+          ...item,
+          order,
+          customer,
+        }
+      })
+      .filter((item): item is OrderItemWithDetails => item !== null)
   })
 
   const getItemsByPrintshop = (printshopId: string | null) => {

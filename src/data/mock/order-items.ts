@@ -10,6 +10,7 @@ export const orderItems: OrderItem[] = [
     quantity: 500,
     specs: { size: '3.5x2', paper: '16pt cardstock', finish: 'matte' },
     assigned_printshop: 'in-house',
+    delivery_method: 'delivery',
     status: 'delivered',
     status_history: [
       { status: 'new', changed_at: '2026-01-30T09:00:00Z', changed_by: 'System' },
@@ -35,6 +36,7 @@ export const orderItems: OrderItem[] = [
     quantity: 100,
     specs: { size: '8.5x11', paper: '24lb bond', color: 'full color' },
     assigned_printshop: 'in-house',
+    delivery_method: 'delivery',
     status: 'delivered',
     status_history: [
       { status: 'new', changed_at: '2026-01-30T09:00:00Z', changed_by: 'System' },
@@ -61,6 +63,7 @@ export const orderItems: OrderItem[] = [
     quantity: 2,
     specs: { size: '3x6ft', material: 'vinyl', grommets: true },
     assigned_printshop: 'victor',
+    delivery_method: 'delivery',
     status: 'in_production',
     status_history: [
       { status: 'new', changed_at: '2026-01-31T10:30:00Z', changed_by: 'System' },
@@ -83,6 +86,7 @@ export const orderItems: OrderItem[] = [
     quantity: 10,
     specs: { size: '18x24', material: 'coroplast', stake: true },
     assigned_printshop: 'victor',
+    delivery_method: 'delivery',
     status: 'ready',
     status_history: [
       { status: 'new', changed_at: '2026-01-31T10:30:00Z', changed_by: 'System' },
@@ -108,6 +112,7 @@ export const orderItems: OrderItem[] = [
     quantity: 1000,
     specs: { size: '8.5x11', paper: '100lb gloss text', sides: 2 },
     assigned_printshop: 'in-house',
+    delivery_method: 'delivery',
     status: 'ready',
     status_history: [
       { status: 'new', changed_at: '2026-02-01T08:15:00Z', changed_by: 'System' }
@@ -130,6 +135,7 @@ export const orderItems: OrderItem[] = [
     quantity: 25,
     specs: { size: '24x36', paper: '100lb gloss cover' },
     assigned_printshop: 'in-house',
+    delivery_method: 'delivery',
     status: 'on_hold',
     status_history: [
       { status: 'new', changed_at: '2026-02-01T11:00:00Z', changed_by: 'System' }
@@ -150,6 +156,7 @@ export const orderItems: OrderItem[] = [
     quantity: 500,
     specs: { size: '4x6', paper: '14pt cardstock', finish: 'UV coating' },
     assigned_printshop: 'in-house',
+    delivery_method: 'delivery',
     status: 'on_hold',
     status_history: [
       { status: 'new', changed_at: '2026-02-01T11:00:00Z', changed_by: 'System' }
@@ -172,6 +179,7 @@ export const orderItems: OrderItem[] = [
     quantity: 250,
     specs: { size: '8.5x11', paper: '100lb gloss text', fold: 'tri-fold' },
     assigned_printshop: 'victor',
+    delivery_method: 'delivery',
     status: 'assigned',
     status_history: [
       { status: 'new', changed_at: '2026-02-02T09:00:00Z', changed_by: 'System' }
@@ -194,6 +202,7 @@ export const orderItems: OrderItem[] = [
     quantity: 1000,
     specs: { shape: 'circle', size: '3"', material: 'vinyl', finish: 'gloss' },
     assigned_printshop: null,
+    delivery_method: 'delivery',
     status: 'new',
     status_history: [
       { status: 'new', changed_at: '2026-02-02T13:00:00Z', changed_by: 'System' }
@@ -214,6 +223,7 @@ export const orderItems: OrderItem[] = [
     quantity: 500,
     specs: { size: '2x3', material: 'vinyl', finish: 'matte' },
     assigned_printshop: null,
+    delivery_method: 'delivery',
     status: 'new',
     status_history: [
       { status: 'new', changed_at: '2026-02-02T13:00:00Z', changed_by: 'System' }
@@ -236,6 +246,7 @@ export const orderItems: OrderItem[] = [
     quantity: 1,
     specs: { size: '16x20', material: 'canvas', wrap: 'gallery' },
     assigned_printshop: 'victor',
+    delivery_method: 'customer_pickup',
     status: 'picked_up',
     status_history: [
       { status: 'new', changed_at: '2026-01-29T14:00:00Z', changed_by: 'System' }
@@ -258,6 +269,7 @@ export const orderItems: OrderItem[] = [
     quantity: 50,
     specs: { size: 'L', color: 'black', print: 'front and back' },
     assigned_printshop: 'in-house',
+    delivery_method: 'delivery',
     status: 'out_for_delivery',
     status_history: [
       { status: 'new', changed_at: '2026-01-31T15:00:00Z', changed_by: 'System' }
@@ -280,6 +292,7 @@ export const orderItems: OrderItem[] = [
     quantity: 100,
     specs: { pages: 24, size: '8.5x11', binding: 'saddle stitch' },
     assigned_printshop: 'in-house',
+    delivery_method: 'delivery',
     status: 'in_production',
     status_history: [
       { status: 'new', changed_at: '2026-02-01T16:00:00Z', changed_by: 'System' }
@@ -300,6 +313,7 @@ export const orderItems: OrderItem[] = [
     quantity: 50,
     specs: { size: '9x12', pockets: 2 },
     assigned_printshop: 'in-house',
+    delivery_method: 'delivery',
     status: 'assigned',
     status_history: [
       { status: 'new', changed_at: '2026-02-01T16:00:00Z', changed_by: 'System' }
@@ -322,6 +336,7 @@ export const orderItems: OrderItem[] = [
     quantity: 3,
     specs: { size: '24x36', material: 'foam core', lamination: true },
     assigned_printshop: 'victor',
+    delivery_method: 'delivery',
     status: 'canceled',
     status_history: [
       { status: 'new', changed_at: '2026-01-30T12:00:00Z', changed_by: 'System' }

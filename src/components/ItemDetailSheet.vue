@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useOrders } from '@/composables/useOrders'
 import { useOrderItems } from '@/composables/useOrderItems'
 import { useToast } from '@/composables/useToast'
@@ -32,7 +32,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<Emits>()
 
-const { getOrderById, updateItemStatus } = useOrders()
+const { getOrderById, updateItemStatus, fetchItemStatusHistory } = useOrders()
 const { getItemById } = useOrderItems()
 const { toast } = useToast()
 const authStore = useAuthStore()
@@ -95,6 +95,44 @@ const allFiles = ref<OrderFile[]>([
 const files = computed(() => {
   if (!item.value) return []
   return allFiles.value.filter(f => f.order_item_id === item.value!.id)
+})
+
+// Status history (lazy-loaded)
+const statusHistory = ref<any[]>([])
+const loadingStatusHistory = ref(false)
+
+// Load status history when item changes
+watch(() => props.itemId, async (newItemId) => {
+  if (newItemId && props.isOpen) {
+    loadingStatusHistory.value = true
+    statusHistory.value = []
+
+    try {
+      const history = await fetchItemStatusHistory(newItemId)
+      statusHistory.value = history
+    } catch (error) {
+      console.error('Failed to load status history:', error)
+    } finally {
+      loadingStatusHistory.value = false
+    }
+  }
+}, { immediate: true })
+
+// Also load when sheet opens
+watch(() => props.isOpen, async (isOpen) => {
+  if (isOpen && props.itemId) {
+    loadingStatusHistory.value = true
+    statusHistory.value = []
+
+    try {
+      const history = await fetchItemStatusHistory(props.itemId)
+      statusHistory.value = history
+    } catch (error) {
+      console.error('Failed to load status history:', error)
+    } finally {
+      loadingStatusHistory.value = false
+    }
+  }
 })
 
 // Format specs
@@ -276,6 +314,41 @@ const handleDeleteNote = (noteId: string) => {
                   </div>
                 </div>
               </div>
+
+              <!-- Status History -->
+              <div class="border-t pt-3">
+                <Label class="text-xs text-muted-foreground mb-2 block">
+                  Status History
+                </Label>
+
+                <!-- Loading state -->
+                <div v-if="loadingStatusHistory" class="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                  <div class="animate-spin rounded-full h-3 w-3 border-b-2 border-primary"></div>
+                  <span>Loading history...</span>
+                </div>
+
+                <!-- History loaded -->
+                <div v-else-if="statusHistory.length > 0" class="space-y-2">
+                  <div
+                    v-for="(history, index) in statusHistory"
+                    :key="index"
+                    class="flex items-start gap-2 text-xs"
+                  >
+                    <Badge :variant="getStatusVariant(history.status)" class="text-xs">
+                      {{ formatStatus(history.status) }}
+                    </Badge>
+                    <span class="text-muted-foreground">
+                      {{ formatDate(history.changed_at) }}
+                    </span>
+                    <span class="text-muted-foreground">by {{ history.changed_by }}</span>
+                  </div>
+                </div>
+
+                <!-- No history -->
+                <div v-else class="text-xs text-muted-foreground py-2">
+                  No status changes yet
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -334,7 +407,7 @@ const handleDeleteNote = (noteId: string) => {
                   <div>
                     <Label class="text-xs text-muted-foreground mb-1 block">Delivery Method</Label>
                     <Badge variant="secondary" class="text-xs">
-                      {{ order.delivery_method === 'delivery' ? 'Delivery' : 'Customer Pickup' }}
+                      {{ order.deliveryMethodRollup === 'delivery' ? 'Delivery' : 'Customer Pickup' }}
                     </Badge>
                   </div>
                 </div>

@@ -19,7 +19,7 @@ const terminalStatuses: ItemStatus[] = ['delivered', 'picked_up', 'canceled']
 const archivedItems = computed(() => {
   return getAllItems().filter(item => {
     // Only delivery orders (not pickup)
-    if (item.order.delivery_method !== 'delivery') return false
+    if (item.delivery_method !== 'delivery') return false
     // Only terminal statuses
     return terminalStatuses.includes(item.status)
   })

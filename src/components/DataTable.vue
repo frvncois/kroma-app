@@ -163,8 +163,8 @@ const table = useVueTable({
       </template>
 
       <!-- Empty State -->
-      <div v-else class="flex h-24 items-center justify-center rounded-xl border bg-card text-sm text-muted-foreground">
-        No results.
+      <div v-else class="flex h-24 items-center justify-center rounded-xl border bg-card text-sm text-muted-foreground mx-2">
+        No orders
       </div>
     </div>
 

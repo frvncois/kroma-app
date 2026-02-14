@@ -266,9 +266,9 @@ watch(() => mentionSuggestions.value.length, () => {
             <div class="flex items-start justify-between mb-2">
               <div class="flex-1">
                 <div class="flex items-center gap-2">
-                  <div class="text-sm font-semibold">{{ note.created_by }}</div>
-                  <Badge v-if="note.item_reference" variant="outline" class="text-xs">
-                    {{ note.item_reference }}
+                  <div class="text-sm font-semibold">{{ note.users?.name || 'Unknown' }}</div>
+                  <Badge v-if="note.entity_type === 'order_item'" variant="outline" class="text-xs">
+                    Item Note
                   </Badge>
                 </div>
                 <div class="text-xs text-muted-foreground">{{ formatNoteDate(note.created_at) }}</div>

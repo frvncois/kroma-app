@@ -9,6 +9,8 @@ export type ItemStatus =
   | 'picked_up'
   | 'canceled'
 
+export type DeliveryMethod = 'delivery' | 'customer_pickup'
+
 export interface StatusHistoryEntry {
   status: ItemStatus
   changed_at: string
@@ -24,8 +26,9 @@ export interface OrderItem {
   quantity: number
   specs: Record<string, any>
   assigned_printshop: string | null
+  delivery_method: DeliveryMethod
   status: ItemStatus
-  status_history: StatusHistoryEntry[]
+  status_history?: StatusHistoryEntry[]
   notes: string
   due_date: string | null
   production_start_date: string | null

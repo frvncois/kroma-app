@@ -23,39 +23,28 @@ const handleLogin = async () => {
   error.value = ''
   isLoading.value = true
 
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 500))
+  try {
+    const result = await authStore.login(email.value, password.value)
 
-  const result = authStore.login(email.value, password.value)
-
-  if (result.success) {
-    // Redirect based on role
-    const role = authStore.userRole
-    if (role === 'manager') {
-      router.push('/manager/orders')
-    } else if (role === 'printshop_manager') {
-      router.push('/printshop/queue')
-    } else if (role === 'driver') {
-      router.push('/driver/deliveries')
+    if (result.success) {
+      // Redirect based on role
+      const role = authStore.userRole
+      if (role === 'manager') {
+        router.push('/manager/orders')
+      } else if (role === 'printshop_manager') {
+        router.push('/printshop/queue')
+      } else if (role === 'driver') {
+        router.push('/driver/deliveries')
+      }
+    } else {
+      error.value = result.message || 'Login failed'
     }
-  } else {
-    error.value = result.message || 'Login failed'
+  } catch (err) {
+    console.error('Login error:', err)
+    error.value = 'An unexpected error occurred. Please try again.'
+  } finally {
+    isLoading.value = false
   }
-
-  isLoading.value = false
-}
-
-const testAccounts = [
-  { email: 'manager@kroma.com', password: '1234', role: 'Manager' },
-  { email: 'victor@kroma.com', password: '1234', role: 'Printshop Manager' },
-  { email: 'alex@kroma.com', password: '1234', role: 'Driver (Alex)' },
-  { email: 'sam@kroma.com', password: '1234', role: 'Driver (Sam)' },
-  { email: 'jordan@kroma.com', password: '1234', role: 'Driver (Jordan)' },
-]
-
-const fillCredentials = (testEmail: string, testPassword: string) => {
-  email.value = testEmail
-  password.value = testPassword
 }
 </script>
 
@@ -112,29 +101,6 @@ const fillCredentials = (testEmail: string, testPassword: string) => {
               {{ isLoading ? 'Signing in...' : 'Sign in' }}
             </Button>
           </form>
-
-          <!-- Development Hint -->
-          <div class="pt-4 border-t">
-            <p class="text-xs text-muted-foreground text-center mb-3">
-              Development Test Accounts
-            </p>
-            <div class="space-y-2">
-              <button
-                v-for="account in testAccounts"
-                :key="account.email"
-                @click="fillCredentials(account.email, account.password)"
-                class="w-full text-left px-3 py-2 rounded-md border bg-muted/30 hover:bg-muted transition-colors"
-              >
-                <div class="flex items-center justify-between">
-                  <div>
-                    <div class="text-xs font-medium">{{ account.role }}</div>
-                    <div class="text-xs text-muted-foreground">{{ account.email }}</div>
-                  </div>
-                  <div class="text-xs text-muted-foreground">{{ account.password }}</div>
-                </div>
-              </button>
-            </div>
-          </div>
         </CardContent>
       </Card>
     </div>

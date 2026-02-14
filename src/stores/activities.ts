@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import type { Activity } from '@/types'
-import { activities as mockActivities } from '@/data/mock/activities'
+import { supabase } from '@/lib/supabase'
 import { useAuthStore } from './auth'
 import { useOrderStore } from './orders'
 import { useCustomerStore } from './customers'
@@ -9,9 +9,111 @@ import pingSound from '@/assets/ping.mp3'
 
 export const useActivityStore = defineStore('activities', () => {
   // State
-  const activities = ref<Activity[]>([...mockActivities])
+  const activities = ref<Activity[]>([])
+  const seenIds = ref<Set<string>>(new Set())
+  const importantIds = ref<Set<string>>(new Set())
   const lastSoundPlayedAt = ref<number>(0)
   const initialLoadComplete = ref(false)
+  let realtimeChannel: any = null
+
+  // Load/Save LocalStorage
+  function loadFromLocalStorage() {
+    try {
+      const seenData = localStorage.getItem('kroma-seen-activities')
+      if (seenData) {
+        seenIds.value = new Set(JSON.parse(seenData))
+      }
+
+      const importantData = localStorage.getItem('kroma-important-activities')
+      if (importantData) {
+        importantIds.value = new Set(JSON.parse(importantData))
+      }
+    } catch (error) {
+      console.error('Failed to load activity preferences:', error)
+    }
+  }
+
+  function saveSeenToLocalStorage() {
+    try {
+      localStorage.setItem('kroma-seen-activities', JSON.stringify([...seenIds.value]))
+    } catch (error) {
+      console.error('Failed to save seen activities:', error)
+    }
+  }
+
+  function saveImportantToLocalStorage() {
+    try {
+      localStorage.setItem('kroma-important-activities', JSON.stringify([...importantIds.value]))
+    } catch (error) {
+      console.error('Failed to save important activities:', error)
+    }
+  }
+
+  // Fetch Activities
+  async function fetchActivities() {
+    try {
+      const { data, error } = await supabase
+        .from('activities')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(100)
+
+      if (error) {
+        console.error('Error fetching activities:', error)
+        return
+      }
+
+      if (data) {
+        activities.value = data as Activity[]
+        console.log('Activities loaded:', data.length)
+      }
+    } catch (error) {
+      console.error('Failed to fetch activities:', error)
+    }
+  }
+
+  // Realtime Subscription
+  function setupRealtimeSubscription() {
+    realtimeChannel = supabase
+      .channel('activities-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'activities' },
+        (payload) => {
+          const newActivity = payload.new as Activity
+          activities.value.unshift(newActivity)
+
+          // Play notification sound for new activities
+          if (initialLoadComplete.value) {
+            playNotificationSound()
+          }
+        }
+      )
+      .subscribe()
+  }
+
+  function cleanup() {
+    if (realtimeChannel) {
+      supabase.removeChannel(realtimeChannel)
+      realtimeChannel = null
+    }
+  }
+
+  // Init Action
+  async function init() {
+    loadFromLocalStorage()
+    await fetchActivities()
+
+    // Generate alerts for existing data
+    generateAlerts()
+
+    setupRealtimeSubscription()
+
+    // Mark initial load complete
+    setTimeout(() => {
+      initialLoadComplete.value = true
+    }, 100)
+  }
 
   // Generate alert activities based on order item conditions
   function generateAlerts() {
@@ -42,32 +144,30 @@ export const useActivityStore = defineStore('activities', () => {
 
           // Check if alert already exists
           if (!activities.value.find(a => a.id === alertId)) {
-            alertActivities.push({
+            const activity: Activity = {
               id: alertId,
               type: 'alert',
-              timestamp: now.toISOString(),
+              user_id: 'system',
               user: 'System',
-              seen: false,
-              important: level === 'critical',
-              item: {
-                id: item.id,
-                name: item.product_name,
-                orderId: order.id
-              },
-              order: {
-                id: order.id,
-                externalId: order.external_id || undefined,
-                customer: customer.name
-              },
+              entity_type: 'order_item',
+              entity_id: item.id,
+              order_id: order.id,
+              printshop_id: item.assigned_printshop,
+              timestamp: now.toISOString(),
               details: {
-                message: `Item overdue by ${daysPastDue} day${daysPastDue > 1 ? 's' : ''}`
-              },
-              alert: {
+                message: `Item overdue by ${daysPastDue} day${daysPastDue > 1 ? 's' : ''}`,
                 rule: 'overdue',
                 level,
-                daysSince: daysPastDue
+                daysSince: daysPastDue,
+                itemName: item.product_name,
+                customerName: customer.name,
+                externalId: order.external_id || undefined,
               }
-            })
+            }
+            alertActivities.push(activity)
+            if (level === 'critical') {
+              importantIds.value.add(alertId)
+            }
           }
         }
       }
@@ -82,32 +182,30 @@ export const useActivityStore = defineStore('activities', () => {
           const alertId = `alert-unassigned-${item.id}`
 
           if (!activities.value.find(a => a.id === alertId)) {
-            alertActivities.push({
+            const activity: Activity = {
               id: alertId,
               type: 'alert',
-              timestamp: now.toISOString(),
+              user_id: 'system',
               user: 'System',
-              seen: false,
-              important: level === 'critical',
-              item: {
-                id: item.id,
-                name: item.product_name,
-                orderId: order.id
-              },
-              order: {
-                id: order.id,
-                externalId: order.external_id || undefined,
-                customer: customer.name
-              },
+              entity_type: 'order_item',
+              entity_id: item.id,
+              order_id: order.id,
+              printshop_id: item.assigned_printshop,
+              timestamp: now.toISOString(),
               details: {
-                message: `Unassigned for ${daysUnassigned} day${daysUnassigned > 1 ? 's' : ''}`
-              },
-              alert: {
+                message: `Unassigned for ${daysUnassigned} day${daysUnassigned > 1 ? 's' : ''}`,
                 rule: 'unassigned_stale',
                 level,
-                daysSince: daysUnassigned
+                daysSince: daysUnassigned,
+                itemName: item.product_name,
+                customerName: customer.name,
+                externalId: order.external_id || undefined,
               }
-            })
+            }
+            alertActivities.push(activity)
+            if (level === 'critical') {
+              importantIds.value.add(alertId)
+            }
           }
         }
       }
@@ -122,32 +220,30 @@ export const useActivityStore = defineStore('activities', () => {
           const alertId = `alert-stuck-${item.id}`
 
           if (!activities.value.find(a => a.id === alertId)) {
-            alertActivities.push({
+            const activity: Activity = {
               id: alertId,
               type: 'alert',
-              timestamp: now.toISOString(),
+              user_id: 'system',
               user: 'System',
-              seen: false,
-              important: level === 'critical',
-              item: {
-                id: item.id,
-                name: item.product_name,
-                orderId: order.id
-              },
-              order: {
-                id: order.id,
-                externalId: order.external_id || undefined,
-                customer: customer.name
-              },
+              entity_type: 'order_item',
+              entity_id: item.id,
+              order_id: order.id,
+              printshop_id: item.assigned_printshop,
+              timestamp: now.toISOString(),
               details: {
-                message: `In production for ${daysInProduction} day${daysInProduction > 1 ? 's' : ''}`
-              },
-              alert: {
+                message: `In production for ${daysInProduction} day${daysInProduction > 1 ? 's' : ''}`,
                 rule: 'stuck_production',
                 level,
-                daysSince: daysInProduction
+                daysSince: daysInProduction,
+                itemName: item.product_name,
+                customerName: customer.name,
+                externalId: order.external_id || undefined,
               }
-            })
+            }
+            alertActivities.push(activity)
+            if (level === 'critical') {
+              importantIds.value.add(alertId)
+            }
           }
         }
       }
@@ -180,17 +276,17 @@ export const useActivityStore = defineStore('activities', () => {
         // Everyone sees new orders
         if (activity.type === 'order_created') return true
 
-        // If activity has an item reference, check if the item is assigned to user's shop
-        if (activity.item?.id) {
-          const item = orderStore.orderItems.find(i => i.id === activity.item!.id)
+        // If activity is for an order_item, check if the item is assigned to user's shop
+        if (activity.entity_type === 'order_item') {
+          const item = orderStore.orderItems.find(i => i.id === activity.entity_id)
           if (item && item.assigned_printshop && userShops.includes(item.assigned_printshop)) {
             return true
           }
         }
 
-        // If activity has an order reference but no item, check if ANY item in that order is assigned to user's shops
-        if (activity.order?.id && !activity.item?.id) {
-          const orderItems = orderStore.orderItems.filter(i => i.order_id === activity.order!.id)
+        // If activity is for an order (not item), check if ANY item in that order is assigned to user's shops
+        if (activity.entity_type === 'order' && activity.order_id) {
+          const orderItems = orderStore.orderItems.filter(i => i.order_id === activity.order_id)
           if (orderItems.some(i => i.assigned_printshop && userShops.includes(i.assigned_printshop))) {
             return true
           }
@@ -259,41 +355,74 @@ export const useActivityStore = defineStore('activities', () => {
     previousActivityCount = newActivities.length
   }, { deep: false })
 
-  // Actions
-  function addActivity(activity: Activity) {
-    // Add to beginning of array (most recent first)
-    activities.value.unshift(activity)
+  // Add Activity
+  async function addActivity(activityData: Omit<Activity, 'id' | 'timestamp'>) {
+    try {
+      const { data, error } = await supabase
+        .from('activities')
+        .insert({
+          ...activityData,
+          timestamp: new Date().toISOString(),
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Error adding activity:', error)
+        return null
+      }
+
+      // Note: local state updates via realtime subscription
+      // No need to manually push to activities array
+
+      return data as Activity
+    } catch (error) {
+      console.error('Failed to add activity:', error)
+      return null
+    }
   }
 
+  // Toggle Seen and Important
   function toggleSeen(activityId: string) {
-    const activity = activities.value.find(a => a.id === activityId)
-    if (activity) {
-      activity.seen = !activity.seen
+    if (seenIds.value.has(activityId)) {
+      seenIds.value.delete(activityId)
+    } else {
+      seenIds.value.add(activityId)
     }
+    saveSeenToLocalStorage()
   }
 
   function toggleImportant(activityId: string) {
-    const activity = activities.value.find(a => a.id === activityId)
-    if (activity) {
-      activity.important = !activity.important
+    if (importantIds.value.has(activityId)) {
+      importantIds.value.delete(activityId)
+    } else {
+      importantIds.value.add(activityId)
     }
+    saveImportantToLocalStorage()
   }
 
-  // Initialize: generate alerts on store creation
-  generateAlerts()
+  function isSeen(activityId: string): boolean {
+    return seenIds.value.has(activityId)
+  }
 
-  // Mark initial load complete after a brief delay to ensure alerts are loaded
-  setTimeout(() => {
-    initialLoadComplete.value = true
-  }, 100)
+  function isImportant(activityId: string): boolean {
+    return importantIds.value.has(activityId)
+  }
 
   return {
     // State
     activities,
+    seenIds,
+    importantIds,
     // Getters
     allActivities,
     getActivitiesForRole,
+    isSeen,
+    isImportant,
     // Actions
+    init,
+    cleanup,
+    fetchActivities,
     addActivity,
     toggleSeen,
     toggleImportant,

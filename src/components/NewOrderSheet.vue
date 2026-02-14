@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useCustomers } from '@/composables/useCustomers'
+import { useOrders } from '@/composables/useOrders'
 import { usePrintshops } from '@/composables/usePrintshops'
+import { useToast } from '@/composables/useToast'
 import type { Customer, PaymentStatus, PaymentMethod, DeliveryMethod, OrderNote, NoteDepartment } from '@/types'
 import Sheet from '@/components/ui/Sheet.vue'
 import Card from '@/components/ui/Card.vue'
@@ -29,8 +31,10 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-const { getCustomers } = useCustomers()
+const { getCustomers, addCustomer } = useCustomers()
+const { createOrder: createOrderInStore } = useOrders()
 const { getPrintshops } = usePrintshops()
+const { toast } = useToast()
 
 // Customer section
 const showNewCustomerForm = ref(false)
@@ -83,9 +87,11 @@ const toggleNewCustomerForm = () => {
 const deliveryMethod = ref<DeliveryMethod>('delivery')
 const paymentStatus = ref<PaymentStatus>('unpaid')
 const paymentMethod = ref<PaymentMethod>('cash')
-const amountTotal = ref<number>(0)
+const deliveryFees = ref<number>(0)
 const amountPaid = ref<number>(0)
 const orderNotes = ref('')
+const useCustomerAddress = ref(true)
+const customDeliveryAddress = ref('')
 
 // Payment options
 const paymentStatusOptions = [
@@ -101,6 +107,21 @@ const paymentMethodOptions = [
   { value: 'invoice', label: 'Invoice' },
   { value: 'other', label: 'Other' },
 ]
+
+// Computed totals
+const itemsSubtotal = computed(() => {
+  return items.value.reduce((sum, item) => {
+    if (item.pricing_type === 'unit') {
+      return sum + (item.unit_price * item.quantity)
+    } else {
+      return sum + item.flat_price
+    }
+  }, 0)
+})
+
+const amountTotal = computed(() => {
+  return itemsSubtotal.value + deliveryFees.value
+})
 
 // Auto-update amount paid when payment status changes
 const handlePaymentStatusChange = (status: string | string[]) => {
@@ -125,6 +146,9 @@ interface OrderItem {
   product_name: string
   description: string
   quantity: number
+  pricing_type: 'unit' | 'flat'
+  unit_price: number
+  flat_price: number
   specs: string
   assigned_printshop: string | null
   due_date: string | null
@@ -166,6 +190,9 @@ const addItem = () => {
     product_name: '',
     description: '',
     quantity: 1,
+    pricing_type: 'unit' as const,
+    unit_price: 0,
+    flat_price: 0,
     specs: '',
     assigned_printshop: null,
     due_date: null,
@@ -204,13 +231,27 @@ const itemReferenceOptions = computed(() => [
 
 // Note handlers
 const handleAddNote = (content: string, departments: NoteDepartment[], itemReference: string | null) => {
+  // Determine entity_type and entity_id
+  let entity_type: 'order' | 'order_item' = 'order'
+  let entity_id = 'temp-order-id' // placeholder for new order
+
+  if (itemReference && itemReference !== 'order') {
+    // itemReference is product_name or item id, need to find the item
+    const item = items.value.find(i => i.product_name === itemReference || i.id === itemReference)
+    if (item) {
+      entity_type = 'order_item'
+      entity_id = item.id
+    }
+  }
+
   const note: OrderNote = {
     id: `note-${Date.now()}`,
+    entity_type,
+    entity_id,
     content,
     departments,
     created_at: new Date().toISOString(),
     created_by: 'Current User',
-    item_reference: itemReference
   }
 
   notes.value.unshift(note)
@@ -291,40 +332,72 @@ const validateForm = (): boolean => {
   return validationErrors.value.length === 0
 }
 
-const createOrder = () => {
+const createOrder = async () => {
   if (!validateForm()) {
     return
   }
 
-  const orderData = {
-    customer: showNewCustomerForm.value ? newCustomer.value : selectedCustomer.value,
-    delivery_method: deliveryMethod.value,
-    payment_status: paymentStatus.value,
-    payment_method: paymentMethod.value,
-    amount_total: amountTotal.value,
-    amount_paid: amountPaid.value,
-    notes: orderNotes.value,
-    items: items.value.map((item) => ({
+  try {
+    // 1. Handle customer (create new or use existing)
+    let customerId: string
+    if (showNewCustomerForm.value) {
+      const newCustomerResult = await addCustomer(newCustomer.value)
+      if (!newCustomerResult) {
+        toast({ title: 'Failed to create customer', variant: 'destructive' })
+        return
+      }
+      customerId = newCustomerResult.id
+    } else if (selectedCustomer.value) {
+      customerId = selectedCustomer.value.id
+    } else {
+      toast({ title: 'Please select or create a customer', variant: 'destructive' })
+      return
+    }
+
+    // 2. Prepare order data
+    const orderData = {
+      customer_id: customerId,
+      source: 'other' as const,
+      payment_status: paymentStatus.value,
+      payment_method: paymentMethod.value,
+      amount_total: amountTotal.value,
+      amount_paid: amountPaid.value,
+      internal_notes: orderNotes.value,
+    }
+
+    // 3. Prepare items data
+    const itemsData = items.value.map((item) => ({
       product_name: item.product_name,
-      description: item.description,
+      description: item.description || '',
       quantity: item.quantity,
-      specs: item.specs,
-      assigned_printshop: item.assigned_printshop,
-      status: item.assigned_printshop ? 'assigned' : 'new',
-    })),
-    source: 'manual',
+      // Convert flat price to unit price for storage
+      unit_price: item.pricing_type === 'unit'
+        ? item.unit_price
+        : (item.flat_price / item.quantity),
+      specs: item.specs || {},
+      assigned_printshop: item.assigned_printshop || null,
+      delivery_method: deliveryMethod.value,
+      due_date: item.due_date || null,
+      notes: '',
+    }))
+
+    // 4. Create the order
+    const newOrder = await createOrderInStore(orderData, itemsData)
+
+    if (!newOrder) {
+      toast({ title: 'Failed to create order', variant: 'destructive' })
+      return
+    }
+
+    // Success!
+    toast({ title: 'Order created successfully!', variant: 'success' })
+    emit('orderCreated', newOrder.id)
+    emit('update:isOpen', false)
+    resetForm()
+  } catch (error) {
+    console.error('Error creating order:', error)
+    toast({ title: 'An error occurred while creating the order', variant: 'destructive' })
   }
-
-  console.log('Creating order:', orderData)
-
-  const mockOrderId = 'order-new-1'
-  alert('Order created successfully!')
-
-  emit('orderCreated', mockOrderId)
-  emit('update:isOpen', false)
-
-  // Reset form
-  resetForm()
 }
 
 const resetForm = () => {
@@ -335,8 +408,10 @@ const resetForm = () => {
   deliveryMethod.value = 'delivery'
   paymentStatus.value = 'unpaid'
   paymentMethod.value = 'cash'
-  amountTotal.value = 0
+  deliveryFees.value = 0
   amountPaid.value = 0
+  useCustomerAddress.value = true
+  customDeliveryAddress.value = ''
   orderNotes.value = ''
   items.value = []
   validationErrors.value = []
@@ -369,18 +444,15 @@ const cancel = () => {
         </ul>
       </div>
 
-      <!-- Customer & Order Information -->
+      <!-- Customer -->
       <div>
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-semibold flex items-center gap-2">
             <div class="p-2 bg-accent rounded-lg">
               <User class="h-4 w-4" />
             </div>
-            Customer & Order Information
+            Customer
           </h3>
-          <Badge :variant="deliveryMethod === 'delivery' ? 'default' : 'secondary'">
-            {{ deliveryMethod === 'delivery' ? 'To deliver' : 'Customer pickup' }}
-          </Badge>
         </div>
 
         <Card>
@@ -488,79 +560,6 @@ const cancel = () => {
                   />
                 </div>
               </div>
-
-              <!-- Delivery Method -->
-              <div class="border-t pt-4">
-                <Label class="text-xs text-muted-foreground mb-2 block">Delivery Method *</Label>
-                <div class="flex gap-4">
-                  <label class="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      v-model="deliveryMethod"
-                      value="delivery"
-                      class="h-4 w-4"
-                    />
-                    <span class="text-sm">Delivery</span>
-                  </label>
-                  <label class="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      v-model="deliveryMethod"
-                      value="customer_pickup"
-                      class="h-4 w-4"
-                    />
-                    <span class="text-sm">Customer Pickup</span>
-                  </label>
-                </div>
-              </div>
-
-              <!-- Payment Information -->
-              <div class="border-t pt-4 space-y-3">
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label class="text-xs text-muted-foreground mb-1 block">Payment Status</Label>
-                    <FilterSelect
-                      :model-value="paymentStatus"
-                      @update:model-value="handlePaymentStatusChange"
-                      :options="paymentStatusOptions"
-                    />
-                  </div>
-
-                  <div>
-                    <Label class="text-xs text-muted-foreground mb-1 block">Payment Method</Label>
-                    <FilterSelect
-                      :model-value="paymentMethod"
-                      @update:model-value="handlePaymentMethodChange"
-                      :options="paymentMethodOptions"
-                    />
-                  </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label class="text-xs text-muted-foreground mb-1 block">Amount Total ($) *</Label>
-                    <Input
-                      v-model="amountTotal"
-                      type="number"
-                      :min="0"
-                      :step="0.01"
-                      placeholder="0.00"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label class="text-xs text-muted-foreground mb-1 block">Amount Paid ($)</Label>
-                    <Input
-                      v-model="amountPaid"
-                      type="number"
-                      :min="0"
-                      :max="amountTotal"
-                      :step="0.01"
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -634,17 +633,74 @@ const cancel = () => {
                   />
                 </div>
 
-                <div class="grid gap-3 md:grid-cols-3">
-                  <div>
-                    <Label class="text-xs text-muted-foreground mb-1 block">Quantity *</Label>
+                <div>
+                  <Label class="text-xs text-muted-foreground mb-1 block">Quantity *</Label>
+                  <Input
+                    v-model.number="item.quantity"
+                    type="number"
+                    :min="1"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label class="text-xs text-muted-foreground mb-2 block">Pricing Type</Label>
+                  <div class="flex gap-3">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        v-model="item.pricing_type"
+                        value="unit"
+                        class="h-4 w-4"
+                      />
+                      <span class="text-sm">Unit Price</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        v-model="item.pricing_type"
+                        value="flat"
+                        class="h-4 w-4"
+                      />
+                      <span class="text-sm">Flat Price</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="grid gap-3 md:grid-cols-2">
+                  <div v-if="item.pricing_type === 'unit'">
+                    <Label class="text-xs text-muted-foreground mb-1 block">Unit Price ($)</Label>
                     <Input
-                      v-model="item.quantity"
+                      v-model.number="item.unit_price"
                       type="number"
-                      :min="1"
-                      required
+                      :min="0"
+                      :step="0.01"
+                      placeholder="0.00"
                     />
                   </div>
 
+                  <div v-if="item.pricing_type === 'flat'">
+                    <Label class="text-xs text-muted-foreground mb-1 block">Flat Price ($)</Label>
+                    <Input
+                      v-model.number="item.flat_price"
+                      type="number"
+                      :min="0"
+                      :step="0.01"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div>
+                    <Label class="text-xs text-muted-foreground mb-1 block">Subtotal</Label>
+                    <div class="h-10 flex items-center px-3 bg-muted rounded-md text-sm font-semibold">
+                      ${{ item.pricing_type === 'unit'
+                        ? (item.quantity * item.unit_price).toFixed(2)
+                        : item.flat_price.toFixed(2) }}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
                   <ItemControls
                     :item="{
                       id: item.id,
@@ -677,6 +733,165 @@ const cancel = () => {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      <!-- Order Information -->
+      <div>
+        <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+          <div class="p-2 bg-accent rounded-lg">
+            <Package class="h-4 w-4" />
+          </div>
+          Order Information
+        </h3>
+
+        <Card>
+          <CardContent class="p-4 space-y-4">
+            <!-- Delivery Method -->
+            <div>
+              <Label class="text-sm font-medium mb-2 block">Delivery Method</Label>
+              <div class="grid grid-cols-2 gap-2">
+                <button
+                  @click="deliveryMethod = 'delivery'"
+                  :class="[
+                    'px-4 py-2 rounded-md border-2 transition-all',
+                    deliveryMethod === 'delivery'
+                      ? 'border-primary bg-primary/10 text-primary font-semibold'
+                      : 'border-border hover:border-muted-foreground'
+                  ]"
+                >
+                  Delivery
+                </button>
+                <button
+                  @click="deliveryMethod = 'customer_pickup'"
+                  :class="[
+                    'px-4 py-2 rounded-md border-2 transition-all',
+                    deliveryMethod === 'customer_pickup'
+                      ? 'border-primary bg-primary/10 text-primary font-semibold'
+                      : 'border-border hover:border-muted-foreground'
+                  ]"
+                >
+                  Customer Pickup
+                </button>
+              </div>
+            </div>
+
+            <!-- Delivery Address (if delivery selected) -->
+            <div v-if="deliveryMethod === 'delivery'">
+              <Label class="text-sm font-medium mb-2 block">Delivery Address</Label>
+              <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    id="use-customer-address"
+                    :checked="useCustomerAddress"
+                    @change="useCustomerAddress = true"
+                    class="h-4 w-4"
+                  />
+                  <Label for="use-customer-address" class="text-sm cursor-pointer">
+                    Use customer address
+                    <span v-if="selectedCustomer" class="text-muted-foreground ml-1">
+                      ({{ selectedCustomer.address }})
+                    </span>
+                  </Label>
+                </div>
+                <div class="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    id="use-custom-address"
+                    :checked="!useCustomerAddress"
+                    @change="useCustomerAddress = false"
+                    class="h-4 w-4"
+                  />
+                  <Label for="use-custom-address" class="text-sm cursor-pointer">
+                    Use custom address
+                  </Label>
+                </div>
+                <Input
+                  v-if="!useCustomerAddress"
+                  v-model="customDeliveryAddress"
+                  placeholder="Enter delivery address"
+                  class="mt-2"
+                />
+              </div>
+            </div>
+
+            <!-- Payment Section -->
+            <div class="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label class="text-sm font-medium mb-2 block">Payment Status</Label>
+                <FilterSelect
+                  :options="paymentStatusOptions"
+                  :modelValue="[paymentStatus]"
+                  @update:modelValue="handlePaymentStatusChange"
+                  placeholder="Select status"
+                />
+              </div>
+
+              <div>
+                <Label class="text-sm font-medium mb-2 block">Payment Method</Label>
+                <FilterSelect
+                  :options="paymentMethodOptions"
+                  :modelValue="[paymentMethod]"
+                  @update:modelValue="handlePaymentMethodChange"
+                  placeholder="Select method"
+                />
+              </div>
+            </div>
+
+            <!-- Pricing Summary -->
+            <div class="border-t pt-4 space-y-2">
+              <div class="flex justify-between text-sm">
+                <span class="text-muted-foreground">Items Subtotal:</span>
+                <span class="font-medium">${{ itemsSubtotal.toFixed(2) }}</span>
+              </div>
+
+              <div v-if="deliveryMethod === 'delivery'" class="flex justify-between text-sm items-center gap-2">
+                <span class="text-muted-foreground">Delivery Fees:</span>
+                <Input
+                  v-model.number="deliveryFees"
+                  type="number"
+                  :min="0"
+                  :step="0.01"
+                  placeholder="0.00"
+                  class="w-32 text-right"
+                />
+              </div>
+
+              <div class="flex justify-between text-base font-semibold pt-2 border-t">
+                <span>Total:</span>
+                <span>${{ amountTotal.toFixed(2) }}</span>
+              </div>
+
+              <div class="flex justify-between text-sm items-center gap-2">
+                <span class="text-muted-foreground">Amount Paid:</span>
+                <Input
+                  v-model.number="amountPaid"
+                  type="number"
+                  :min="0"
+                  :max="amountTotal"
+                  :step="0.01"
+                  placeholder="0.00"
+                  class="w-32 text-right"
+                />
+              </div>
+
+              <div v-if="amountPaid < amountTotal" class="flex justify-between text-sm font-medium text-destructive">
+                <span>Balance Due:</span>
+                <span>${{ (amountTotal - amountPaid).toFixed(2) }}</span>
+              </div>
+            </div>
+
+            <!-- Internal Notes -->
+            <div>
+              <Label class="text-sm font-medium mb-2 block">Internal Notes</Label>
+              <Textarea
+                v-model="orderNotes"
+                placeholder="Add internal notes for this order..."
+                :rows="3"
+              />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <!-- Files -->

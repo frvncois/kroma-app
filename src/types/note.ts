@@ -4,13 +4,25 @@
 export type NoteDepartment = 'printshop' | 'delivery' | 'billing' | 'everyone'
 
 /**
- * Order note interface
+ * Note entity type
  */
-export interface OrderNote {
+export type NoteEntityType = 'order' | 'order_item' | 'driver_task'
+
+/**
+ * Note interface
+ */
+export interface Note {
   id: string
+  entity_type: NoteEntityType
+  entity_id: string
   content: string
   departments: NoteDepartment[]
   created_at: string
   created_by: string
-  item_reference: string | null
+  users?: { name: string } | null
 }
+
+/**
+ * Backward compatibility alias
+ */
+export type OrderNote = Note

@@ -54,7 +54,7 @@ const searchResults = computed<SearchResult[]>(() => {
     // Driver: only ready orders for delivery
     if (isDriver) {
       recentOrders = recentOrders.filter(o =>
-        o.delivery_method === 'delivery' &&
+        o.deliveryMethodRollup === 'delivery' &&
         o.items.every(i => ['ready', 'out_for_delivery', 'delivered'].includes(i.status))
       )
     }
@@ -90,7 +90,7 @@ const searchResults = computed<SearchResult[]>(() => {
     // Driver: only ready orders for delivery
     if (isDriver) {
       orders = orders.filter(o =>
-        o.delivery_method === 'delivery' &&
+        o.deliveryMethodRollup === 'delivery' &&
         o.items.every(i => ['ready', 'out_for_delivery', 'delivered'].includes(i.status))
       )
     }

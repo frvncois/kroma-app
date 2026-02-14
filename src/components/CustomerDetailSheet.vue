@@ -271,7 +271,7 @@ const formatLastOrder = (date: string | null): string => {
                     #{{ order.external_id || order.id.slice(0, 8) }}
                   </div>
                   <div class="text-sm text-muted-foreground mt-1">
-                    {{ order.items.length }} item(s) • {{ formatDeliveryMethod(order.delivery_method) }} • {{ formatSource(order.source) }}
+                    {{ order.items.length }} item(s) • {{ formatDeliveryMethod(order.deliveryMethodRollup) }} • {{ formatSource(order.source) }}
                   </div>
                   <div class="text-xs text-muted-foreground mt-1">
                     {{ formatDate(order.created_at) }}

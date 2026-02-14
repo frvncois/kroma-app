@@ -15,6 +15,7 @@ export function useOrders() {
     getOrders: () => store.ordersWithDetails,
     getOrderById: (id: string) => store.getOrderById(id),
     getOrdersByCustomerId: (customerId: string) => store.getOrdersByCustomerId(customerId),
+    createOrder: (orderData: any, itemsData: any) => store.createOrder(orderData, itemsData),
     updateItemStatus: (itemId: string, newStatus: any) => store.updateItemStatus(itemId, newStatus),
     updateOrderItemsStatus: (orderId: string, newStatus: any) => store.updateOrderItemsStatus(orderId, newStatus),
     updatePrintshopItemsStatus: (printshopId: string, orderIds: string[], newStatus: any) =>
@@ -28,5 +29,7 @@ export function useOrders() {
       store.updateItemPrintshop(itemId, newPrintshopId),
     updateItemDueDate: (itemId: string, newDueDate: string | null) =>
       store.updateItemDueDate(itemId, newDueDate),
+    fetchItemStatusHistory: (itemId: string) => store.fetchItemStatusHistory(itemId),
+    commentsCount: (orderId: string) => store.commentsCount(orderId),
   }
 }

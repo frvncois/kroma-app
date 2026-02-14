@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@internationalized/date": "^3.11.0",
+    "@supabase/supabase-js": "^2.95.3",
     "@tanstack/vue-table": "^8.21.3",
     "@vueuse/core": "^14.2.0",
     "class-variance-authority": "^0.7.1",

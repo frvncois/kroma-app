@@ -32,7 +32,7 @@ import { useToast } from '@/composables/useToast'
 
 const route = useRoute()
 const router = useRouter()
-const { getOrders, updateItemStatus, updateItemPrintshop } = useOrders()
+const { getOrders, updateItemStatus, updateItemPrintshop, commentsCount } = useOrders()
 const { getItemsByPrintshop } = useOrderItems()
 const { getPrintshops, getPrintshopById } = usePrintshops()
 const activityStore = useActivityStore()
@@ -44,6 +44,7 @@ const allItems = computed(() => getItemsByPrintshop(null))
 // Table columns with callbacks
 const columns = computed(() => createColumns({
   onOpenDetail: (orderId: string) => openOrderDetail(orderId),
+  getCommentsCount: (orderId: string) => commentsCount(orderId),
 }))
 
 // Row class for unassigned items
@@ -142,6 +143,12 @@ const handleTaskCreated = (taskId: string) => {
 // Filtered and sorted orders (for table view)
 const filteredOrders = computed(() => {
   let filtered = orders.value.filter((order) => {
+    // Hide orders where all items are canceled
+    const nonCanceledItems = order.items.filter(item => item.status !== 'canceled')
+    if (nonCanceledItems.length === 0) {
+      return false
+    }
+
     if (viewMode.value === 'table' && !statusFilter.value.includes('all') && !statusFilter.value.includes(order.statusRollup)) {
       return false
     }
@@ -237,7 +244,7 @@ const stats = computed(() => {
       const notComplete = !['ready', 'out_for_delivery', 'delivered', 'picked_up'].includes(item.status)
       return dueDate < today && notComplete
     }).length,
-    readyForDelivery: allItems.value.filter((item) => item.status === 'ready' && item.order.delivery_method === 'delivery').length,
+    readyForDelivery: allItems.value.filter((item) => item.status === 'ready' && item.delivery_method === 'delivery').length,
     outForDelivery: allItems.value.filter((item) => item.status === 'out_for_delivery').length,
     deliveryLate: 0,
     unpaid: orders.value.filter((o) => o.payment_status === 'unpaid' || o.payment_status === 'partial').length,
@@ -306,7 +313,7 @@ const showStatsSheet = (type: string) => {
     readyForDelivery: () => {
       statsSheetTitle.value = 'Waiting for Pickup'
       statsSheetItems.value = allItems.value.filter((item) => {
-        return item.status === 'ready' && item.order.delivery_method === 'delivery'
+        return item.status === 'ready' && item.delivery_method === 'delivery'
       })
     },
     outForDelivery: () => {

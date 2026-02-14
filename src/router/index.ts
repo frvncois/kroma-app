@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import AppLayout from '@/components/AppLayout.vue'
 import LoginView from '@/views/LoginView.vue'
@@ -86,8 +87,24 @@ const router = createRouter({
 })
 
 // Navigation guard
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
+
+  // Wait for auth initialization to complete
+  if (authStore.isLoading) {
+    // Wait for loading to complete
+    await new Promise<void>((resolve) => {
+      const unwatch = watch(
+        () => authStore.isLoading,
+        (loading) => {
+          if (!loading) {
+            unwatch()
+            resolve()
+          }
+        }
+      )
+    })
+  }
 
   // Check if route requires authentication
   if (to.meta.requiresAuth !== false && !authStore.isAuthenticated) {

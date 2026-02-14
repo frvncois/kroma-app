@@ -159,8 +159,8 @@ const handleRowClick = (item: OrderItemWithDetails) => {
 // Activity handlers
 const handleActivityClick = (activityId: string) => {
   const activity = activities.value.find((a) => a.id === activityId)
-  if (activity?.order?.id) {
-    openOrderDetail(activity.order.id)
+  if (activity?.order_id) {
+    openOrderDetail(activity.order_id)
   }
 }
 

@@ -1,57 +1,125 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Customer } from '@/types'
-import { customers as mockCustomers } from '@/data/mock/customers'
+import { supabase } from '@/lib/supabase'
 import { useOrderStore } from './orders'
 
 export const useCustomerStore = defineStore('customers', () => {
   // State
-  const customers = ref<Customer[]>([...mockCustomers])
-
-  // Getters
-  const allCustomers = computed(() => customers.value)
-
-  function getCustomerById(id: string): Customer | undefined {
-    return customers.value.find((c) => c.id === id)
-  }
+  const customers = ref<Customer[]>([])
 
   // Actions
-  function addCustomer(customerData: {
+  async function fetchCustomers() {
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .order('name')
+
+      if (error) {
+        console.error('Error fetching customers:', error)
+        return
+      }
+
+      if (data) {
+        customers.value = data as Customer[]
+        console.log('Customers loaded:', data.length)
+      }
+    } catch (error) {
+      console.error('Failed to fetch customers:', error)
+    }
+  }
+
+  async function addCustomer(customerData: {
     name: string
     email: string
     phone: string
     company?: string | null
     address: string
     notes?: string
-  }): Customer {
-    const now = new Date().toISOString()
-    const newCustomer: Customer = {
-      id: `cust-${Date.now()}`,
-      name: customerData.name,
-      email: customerData.email,
-      phone: customerData.phone,
-      company: customerData.company || null,
-      address: customerData.address,
-      lat: 0, // Phase 4 will geocode
-      lng: 0,
-      notes: customerData.notes || '',
-      created_at: now,
-      updated_at: now,
-    }
+  }): Promise<Customer | null> {
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .insert({
+          name: customerData.name,
+          email: customerData.email,
+          phone: customerData.phone,
+          company: customerData.company || null,
+          address: customerData.address,
+          lat: 0, // Phase 4 will geocode
+          lng: 0,
+          notes: customerData.notes || '',
+        })
+        .select()
+        .single()
 
-    customers.value.push(newCustomer)
-    return newCustomer
+      if (error) {
+        console.error('Error adding customer:', error)
+        return null
+      }
+
+      if (data) {
+        const newCustomer = data as Customer
+        // Realtime subscription will add to local state automatically
+        console.log('Customer added:', newCustomer.id)
+        return newCustomer
+      }
+
+      return null
+    } catch (error) {
+      console.error('Failed to add customer:', error)
+      return null
+    }
   }
 
-  function updateCustomer(customerId: string, updates: Partial<Customer>): Customer | undefined {
-    const customer = customers.value.find((c) => c.id === customerId)
-    if (!customer) return undefined
+  async function updateCustomer(
+    customerId: string,
+    updates: Partial<Customer>
+  ): Promise<Customer | null> {
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', customerId)
+        .select()
+        .single()
 
-    Object.assign(customer, updates, {
-      updated_at: new Date().toISOString(),
-    })
+      if (error) {
+        console.error('Error updating customer:', error)
+        return null
+      }
 
-    return customer
+      if (data) {
+        const updatedCustomer = data as Customer
+        // Update local state
+        const index = customers.value.findIndex((c) => c.id === customerId)
+        if (index !== -1) {
+          customers.value[index] = updatedCustomer
+        }
+        console.log('Customer updated:', customerId)
+        return updatedCustomer
+      }
+
+      return null
+    } catch (error) {
+      console.error('Failed to update customer:', error)
+      return null
+    }
+  }
+
+  async function init() {
+    await fetchCustomers()
+  }
+
+  // Getters
+  const allCustomers = computed(() => customers.value)
+
+  function getCustomerById(id: string): Customer | undefined {
+    return customers.value.find((c) => c.id === id)
   }
 
   function getCustomerOrderStats(customerId: string): {
@@ -111,9 +179,11 @@ export const useCustomerStore = defineStore('customers', () => {
     allCustomers,
     getCustomerById,
     // Actions
+    fetchCustomers,
     addCustomer,
     updateCustomer,
     getCustomerOrderStats,
     searchCustomers,
+    init,
   }
 })

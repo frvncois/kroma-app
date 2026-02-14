@@ -3,7 +3,8 @@ import type { OrderFile } from '@/types'
 export const orderFiles: OrderFile[] = [
   {
     id: 'file-1',
-    order_item_id: 'item-1',
+    entity_type: 'order_item',
+    entity_id: 'item-1',
     file_url: '/files/business-cards-artwork.pdf',
     file_name: 'business-cards-artwork.pdf',
     file_type: 'artwork',
@@ -12,7 +13,8 @@ export const orderFiles: OrderFile[] = [
   },
   {
     id: 'file-2',
-    order_item_id: 'item-1',
+    entity_type: 'order_item',
+    entity_id: 'item-1',
     file_url: '/files/logo-highres.png',
     file_name: 'logo-highres.png',
     file_type: 'reference',
@@ -21,7 +23,8 @@ export const orderFiles: OrderFile[] = [
   },
   {
     id: 'file-3',
-    order_item_id: 'item-3',
+    entity_type: 'order_item',
+    entity_id: 'item-3',
     file_url: '/files/banner-design-final.ai',
     file_name: 'banner-design-final.ai',
     file_type: 'artwork',
@@ -30,7 +33,8 @@ export const orderFiles: OrderFile[] = [
   },
   {
     id: 'file-4',
-    order_item_id: 'item-3',
+    entity_type: 'order_item',
+    entity_id: 'item-3',
     file_url: '/files/banner-proof-v2.pdf',
     file_name: 'banner-proof-v2.pdf',
     file_type: 'proof',
@@ -39,7 +43,8 @@ export const orderFiles: OrderFile[] = [
   },
   {
     id: 'file-5',
-    order_item_id: 'item-5',
+    entity_type: 'order_item',
+    entity_id: 'item-5',
     file_url: '/files/flyer-template.indd',
     file_name: 'flyer-template.indd',
     file_type: 'artwork',
@@ -48,7 +53,8 @@ export const orderFiles: OrderFile[] = [
   },
   {
     id: 'file-6',
-    order_item_id: 'item-8',
+    entity_type: 'order_item',
+    entity_id: 'item-8',
     file_url: '/files/brochure-artwork.pdf',
     file_name: 'brochure-artwork.pdf',
     file_type: 'artwork',
@@ -57,7 +63,8 @@ export const orderFiles: OrderFile[] = [
   },
   {
     id: 'file-7',
-    order_item_id: 'item-8',
+    entity_type: 'order_item',
+    entity_id: 'item-8',
     file_url: '/files/brand-guidelines.pdf',
     file_name: 'brand-guidelines.pdf',
     file_type: 'reference',
@@ -66,7 +73,8 @@ export const orderFiles: OrderFile[] = [
   },
   {
     id: 'file-8',
-    order_item_id: 'item-12',
+    entity_type: 'order_item',
+    entity_id: 'item-12',
     file_url: '/files/tshirt-mockup.jpg',
     file_name: 'tshirt-mockup.jpg',
     file_type: 'proof',

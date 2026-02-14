@@ -2,10 +2,10 @@
 export type { Customer } from './customer'
 
 // Order
-export type { Order, OrderSource, DeliveryMethod, PaymentStatus, PaymentMethod } from './order'
+export type { Order, OrderSource, PaymentStatus, PaymentMethod } from './order'
 
 // Order Item
-export type { OrderItem, ItemStatus, StatusHistoryEntry } from './order-item'
+export type { OrderItem, ItemStatus, StatusHistoryEntry, DeliveryMethod } from './order-item'
 
 // Printshop
 export type { Printshop } from './printshop'
@@ -14,10 +14,13 @@ export type { Printshop } from './printshop'
 export type { User, UserRole } from './user'
 
 // Order File
-export type { OrderFile, FileType } from './order-file'
+export type { OrderFile, FileType, FileEntityType } from './order-file'
 
 // Activity
-export type { Activity } from './activity'
+export type { Activity, ActivityEntityType } from './activity'
 
 // Note
-export type { OrderNote, NoteDepartment } from './note'
+export type { Note, OrderNote, NoteDepartment, NoteEntityType } from './note'
+
+// Driver Task
+export type { DriverTask, DriverTaskType, DriverTaskPriority, DriverTaskStatus } from './driver-task'

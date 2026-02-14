@@ -8,250 +8,210 @@ export const activities: Activity[] = [
   {
     id: 'act-1',
     type: 'pickup',
-    timestamp: minutesAgo(5),
+    user_id: 'user-3',
     user: 'Sarah Chen',
-    seen: false,
-    important: false,
-    item: {
-      id: 'item-1',
-      name: 'Business Cards - 500x',
-      orderId: 'order-1'
-    },
-    order: {
-      id: 'order-1',
-      externalId: 'IQ-2024-001',
-      customer: 'Acme Corp'
-    },
+    entity_type: 'order_item',
+    entity_id: 'item-1',
+    order_id: 'order-1',
+    printshop_id: null,
+    timestamp: minutesAgo(5),
     details: {
-      message: 'Item marked as picked up'
+      message: 'Item marked as picked up',
+      itemName: 'Business Cards - 500x',
+      customerName: 'Acme Corp',
+      externalId: 'IQ-2024-001'
     }
   },
   {
     id: 'act-2',
     type: 'status_change',
-    timestamp: minutesAgo(12),
+    user_id: 'user-2',
     user: 'Marc Dubois',
-    seen: false,
-    important: false,
-    item: {
-      id: 'item-2',
-      name: 'Vinyl Banner - 4x8ft',
-      orderId: 'order-2'
-    },
-    order: {
-      id: 'order-2',
-      externalId: 'PF-2024-042',
-      customer: 'Tech Startup Inc'
-    },
+    entity_type: 'order_item',
+    entity_id: 'item-2',
+    order_id: 'order-2',
+    printshop_id: null,
+    timestamp: minutesAgo(12),
     details: {
       message: 'Status updated',
       from: 'in production',
-      to: 'ready'
+      to: 'ready',
+      itemName: 'Vinyl Banner - 4x8ft',
+      customerName: 'Tech Startup Inc',
+      externalId: 'PF-2024-042'
     }
   },
   {
     id: 'act-3',
     type: 'note_added',
-    timestamp: minutesAgo(23),
+    user_id: 'user-1',
     user: 'Julie Martin',
-    seen: false,
-    important: false,
-    item: {
-      id: 'item-3',
-      name: 'Poster Print - A1 size',
-      orderId: 'order-3'
-    },
-    order: {
-      id: 'order-3',
-      externalId: 'PROP-2024-089',
-      customer: 'City Museum'
-    },
+    entity_type: 'order_item',
+    entity_id: 'item-3',
+    order_id: 'order-3',
+    printshop_id: null,
+    timestamp: minutesAgo(23),
     details: {
       message: 'Note added to item',
-      note: 'Customer requested matte finish instead of glossy. Updated specs accordingly.'
+      note: 'Customer requested matte finish instead of glossy. Updated specs accordingly.',
+      itemName: 'Poster Print - A1 size',
+      customerName: 'City Museum',
+      externalId: 'PROP-2024-089'
     }
   },
   {
     id: 'act-4',
     type: 'delivery',
-    timestamp: minutesAgo(45),
+    user_id: 'user-3',
     user: 'Driver - Jean',
-    seen: false,
-    important: false,
-    item: {
-      id: 'item-4',
-      name: 'Corrugated Signs - 10x',
-      orderId: 'order-4'
-    },
-    order: {
-      id: 'order-4',
-      externalId: 'SP-2024-156',
-      customer: 'Real Estate Agency'
-    },
+    entity_type: 'order_item',
+    entity_id: 'item-4',
+    order_id: 'order-4',
+    printshop_id: null,
+    timestamp: minutesAgo(45),
     details: {
-      message: 'Out for delivery'
+      message: 'Out for delivery',
+      itemName: 'Corrugated Signs - 10x',
+      customerName: 'Real Estate Agency',
+      externalId: 'SP-2024-156'
     }
   },
   {
     id: 'act-5',
     type: 'assignment',
-    timestamp: minutesAgo(67),
+    user_id: 'user-1',
     user: 'Manager - Claude',
-    seen: false,
-    important: false,
-    item: {
-      id: 'item-5',
-      name: 'Decals Custom - 200x',
-      orderId: 'order-5'
-    },
-    order: {
-      id: 'order-5',
-      externalId: 'IQ-2024-002',
-      customer: 'Local Coffee Shop'
-    },
+    entity_type: 'order_item',
+    entity_id: 'item-5',
+    order_id: 'order-5',
+    printshop_id: null,
+    timestamp: minutesAgo(67),
     details: {
-      message: 'Assigned to In House printshop'
+      message: 'Assigned to In House printshop',
+      itemName: 'Decals Custom - 200x',
+      customerName: 'Local Coffee Shop',
+      externalId: 'IQ-2024-002'
     }
   },
   {
     id: 'act-6',
     type: 'status_change',
-    timestamp: minutesAgo(89),
+    user_id: 'user-2',
     user: 'Victor Printshop',
-    seen: false,
-    important: false,
-    item: {
-      id: 'item-6',
-      name: 'Brochure Printing - 1000x',
-      orderId: 'order-6'
-    },
-    order: {
-      id: 'order-6',
-      externalId: 'PF-2024-043',
-      customer: 'Marketing Agency'
-    },
+    entity_type: 'order_item',
+    entity_id: 'item-6',
+    order_id: 'order-6',
+    printshop_id: null,
+    timestamp: minutesAgo(89),
     details: {
       message: 'Status updated',
       from: 'assigned',
-      to: 'in production'
+      to: 'in production',
+      itemName: 'Brochure Printing - 1000x',
+      customerName: 'Marketing Agency',
+      externalId: 'PF-2024-043'
     }
   },
   {
     id: 'act-7',
     type: 'order_created',
-    timestamp: minutesAgo(105),
+    user_id: 'system',
     user: 'Shopify - Imp. Quebec',
-    seen: false,
-    important: false,
-    order: {
-      id: 'order-7',
-      externalId: 'IQ-2024-003',
-      customer: 'Fashion Boutique'
-    },
+    entity_type: 'order',
+    entity_id: 'order-7',
+    order_id: 'order-7',
+    printshop_id: null,
+    timestamp: minutesAgo(105),
     details: {
-      message: 'New order received'
+      message: 'New order received',
+      customerName: 'Fashion Boutique',
+      externalId: 'IQ-2024-003'
     }
   },
   {
     id: 'act-8',
     type: 'note_added',
-    timestamp: minutesAgo(134),
+    user_id: 'user-3',
     user: 'Sarah Chen',
-    seen: false,
-    important: false,
-    item: {
-      id: 'item-8',
-      name: 'Vehicle Wrap',
-      orderId: 'order-8'
-    },
-    order: {
-      id: 'order-8',
-      externalId: 'PROP-2024-090',
-      customer: 'Delivery Service'
-    },
+    entity_type: 'order_item',
+    entity_id: 'item-8',
+    order_id: 'order-8',
+    printshop_id: null,
+    timestamp: minutesAgo(134),
     details: {
       message: 'Note added to item',
-      note: 'Customer will drop off vehicle on Monday morning. Confirmed availability with Victor.'
+      note: 'Customer will drop off vehicle on Monday morning. Confirmed availability with Victor.',
+      itemName: 'Vehicle Wrap',
+      customerName: 'Delivery Service',
+      externalId: 'PROP-2024-090'
     }
   },
   {
     id: 'act-9',
     type: 'pickup',
-    timestamp: minutesAgo(167),
+    user_id: 'system',
     user: 'Customer Pickup',
-    seen: false,
-    important: false,
-    item: {
-      id: 'item-9',
-      name: 'Photo Prints - 50x',
-      orderId: 'order-9'
-    },
-    order: {
-      id: 'order-9',
-      externalId: 'SP-2024-157',
-      customer: 'Photography Studio'
-    },
+    entity_type: 'order_item',
+    entity_id: 'item-9',
+    order_id: 'order-9',
+    printshop_id: null,
+    timestamp: minutesAgo(167),
     details: {
-      message: 'Item marked as picked up'
+      message: 'Item marked as picked up',
+      itemName: 'Photo Prints - 50x',
+      customerName: 'Photography Studio',
+      externalId: 'SP-2024-157'
     }
   },
   {
     id: 'act-10',
     type: 'status_change',
-    timestamp: minutesAgo(198),
+    user_id: 'user-2',
     user: 'In House Printshop',
-    seen: false,
-    important: false,
-    item: {
-      id: 'item-10',
-      name: 'T-Shirt Printing - 100x',
-      orderId: 'order-10'
-    },
-    order: {
-      id: 'order-10',
-      externalId: 'IQ-2024-004',
-      customer: 'Sports Team'
-    },
+    entity_type: 'order_item',
+    entity_id: 'item-10',
+    order_id: 'order-10',
+    printshop_id: null,
+    timestamp: minutesAgo(198),
     details: {
       message: 'Status updated',
       from: 'in production',
-      to: 'ready'
+      to: 'ready',
+      itemName: 'T-Shirt Printing - 100x',
+      customerName: 'Sports Team',
+      externalId: 'IQ-2024-004'
     }
   },
   {
     id: 'act-11',
     type: 'delivery',
-    timestamp: minutesAgo(223),
+    user_id: 'user-3',
     user: 'Driver - Jean',
-    seen: false,
-    important: false,
-    item: {
-      id: 'item-11',
-      name: 'Window Graphics',
-      orderId: 'order-11'
-    },
-    order: {
-      id: 'order-11',
-      externalId: 'PF-2024-044',
-      customer: 'Restaurant Chain'
-    },
+    entity_type: 'order_item',
+    entity_id: 'item-11',
+    order_id: 'order-11',
+    printshop_id: null,
+    timestamp: minutesAgo(223),
     details: {
-      message: 'Successfully delivered'
+      message: 'Successfully delivered',
+      itemName: 'Window Graphics',
+      customerName: 'Restaurant Chain',
+      externalId: 'PF-2024-044'
     }
   },
   {
     id: 'act-12',
     type: 'order_created',
-    timestamp: minutesAgo(256),
+    user_id: 'system',
     user: 'Web Form',
-    seen: false,
-    important: false,
-    order: {
-      id: 'order-12',
-      customer: 'Non-Profit Organization'
-    },
+    entity_type: 'order',
+    entity_id: 'order-12',
+    order_id: 'order-12',
+    printshop_id: null,
+    timestamp: minutesAgo(256),
     details: {
-      message: 'New order received'
+      message: 'New order received',
+      customerName: 'Non-Profit Organization'
     }
   }
 ]

@@ -3,8 +3,9 @@ import { ref, computed } from 'vue'
 import { formatDistanceToNow } from 'date-fns'
 import { getStatusVariant, statusColorMap } from '@/lib/variants'
 import { statusOptions } from '@/lib/constants'
-import type { ItemStatus } from '@/types'
+import type { ItemStatus, Activity } from '@/types'
 import { useAuthStore } from '@/stores/auth'
+import { useActivityStore } from '@/stores/activities'
 import Badge from '@/components/ui/Badge.vue'
 import Input from '@/components/ui/Input.vue'
 import Button from '@/components/ui/Button.vue'
@@ -25,37 +26,6 @@ import {
   AlertTriangle
 } from 'lucide-vue-next'
 
-interface Activity {
-  id: string
-  type: 'status_change' | 'note_added' | 'delivery' | 'pickup' | 'assignment' | 'order_created' | 'alert'
-  timestamp: string
-  user: string
-  seen: boolean
-  important: boolean
-  item?: {
-    id: string
-    name: string
-    orderId: string
-  }
-  order?: {
-    id: string
-    externalId?: string
-    customer: string
-  }
-  details: {
-    message: string
-    from?: string
-    to?: string
-    note?: string
-  }
-  // Alert-specific fields
-  alert?: {
-    rule: string
-    level: 'warning' | 'critical'
-    daysSince?: number
-  }
-}
-
 interface Props {
   activities: Activity[]
 }
@@ -70,6 +40,7 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const authStore = useAuthStore()
+const activityStore = useActivityStore()
 
 const getActivityIcon = (type: Activity['type']) => {
   switch (type) {
@@ -93,26 +64,54 @@ const getActivityIcon = (type: Activity['type']) => {
 }
 
 const getActivityColor = (activity: Activity) => {
+  // For status-related activities, use status color
+  let status = getCurrentStatus(activity)
+  if (status) {
+    const statusEnum = status.toLowerCase().replace(/\s+/g, '_') as ItemStatus
+    const colorMap: Record<ItemStatus, string> = {
+      new: 'text-slate-600 bg-slate-50 dark:bg-slate-950',
+      assigned: 'text-blue-600 bg-blue-50 dark:bg-blue-950',
+      in_production: 'text-amber-600 bg-amber-50 dark:bg-amber-950',
+      on_hold: 'text-orange-600 bg-orange-50 dark:bg-orange-950',
+      ready: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-950',
+      out_for_delivery: 'text-violet-600 bg-violet-50 dark:bg-violet-950',
+      delivered: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950',
+      picked_up: 'text-teal-600 bg-teal-50 dark:bg-teal-950',
+      canceled: 'text-red-600 bg-red-50 dark:bg-red-950',
+    }
+    if (colorMap[statusEnum]) return colorMap[statusEnum]
+  }
+
+  // Fallback to activity type colors for non-status activities
   switch (activity.type) {
-    case 'status_change':
-      return 'text-blue-600 bg-blue-50 dark:bg-blue-950'
     case 'note_added':
       return 'text-purple-600 bg-purple-50 dark:bg-purple-950'
-    case 'delivery':
-      return 'text-green-600 bg-green-50 dark:bg-green-950'
-    case 'pickup':
-      return 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950'
-    case 'assignment':
-      return 'text-amber-600 bg-amber-50 dark:bg-amber-950'
     case 'order_created':
       return 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950'
     case 'alert':
-      return activity.alert?.level === 'critical'
+      return activity.details.alertLevel === 'critical'
         ? 'text-red-600 bg-red-50 dark:bg-red-950'
         : 'text-amber-600 bg-amber-50 dark:bg-amber-950'
     default:
       return 'text-gray-600 bg-gray-50 dark:bg-gray-950'
   }
+}
+
+// Helper to get status badge classes based on activity status
+const getStatusBadgeClasses = (status: string): string => {
+  const statusEnum = status.toLowerCase().replace(/\s+/g, '_') as ItemStatus
+  const colorMap: Record<ItemStatus, string> = {
+    new: 'border-slate-600 bg-slate-50 text-slate-700 dark:bg-slate-950 dark:text-slate-400 dark:border-slate-500',
+    assigned: 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-500',
+    in_production: 'border-amber-600 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-500',
+    on_hold: 'border-orange-600 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-400 dark:border-orange-500',
+    ready: 'border-cyan-600 bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-400 dark:border-cyan-500',
+    out_for_delivery: 'border-violet-600 bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-400 dark:border-violet-500',
+    delivered: 'border-emerald-600 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-500',
+    picked_up: 'border-teal-600 bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-400 dark:border-teal-500',
+    canceled: 'border-red-600 bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400 dark:border-red-500',
+  }
+  return colorMap[statusEnum] || 'border-border text-foreground'
 }
 
 const formatTimeAgo = (timestamp: string) => {
@@ -225,6 +224,41 @@ const getStatusColor = (status: string): string => {
   return statusColorMap[status as ItemStatus] || ''
 }
 
+// Helper to get border/outline classes based on activity status
+const getActivityBorderClasses = (activity: Activity): string => {
+  // Important (starred) activities always get orange border
+  if (activityStore.isImportant(activity.id)) {
+    return 'border-orange-600 dark:border-orange-900 shadow-orange-100 shadow-sm outline outline-4 outline-orange-600/10'
+  }
+
+  // Seen items get default border (no color)
+  if (activityStore.isSeen(activity.id)) {
+    return 'border-border'
+  }
+
+  // Get the status for this activity
+  let status = getCurrentStatus(activity)
+  if (!status) return 'border-border' // Default border if no status
+
+  // Convert formatted status ("Ready", "In Production") to enum value ("ready", "in_production")
+  const statusEnum = status.toLowerCase().replace(/\s+/g, '_') as ItemStatus
+
+  // Map status to border/outline colors (only for unseen items)
+  const colorMap: Record<ItemStatus, string> = {
+    new: 'border-slate-600 outline outline-3 outline-slate-600/10',
+    assigned: 'border-blue-600 outline outline-3 outline-blue-600/10',
+    in_production: 'border-amber-600 outline outline-3 outline-amber-600/10',
+    on_hold: 'border-orange-600 outline outline-3 outline-orange-600/10',
+    ready: 'border-cyan-600 outline outline-3 outline-cyan-600/10',
+    out_for_delivery: 'border-violet-600 outline outline-3 outline-violet-600/10',
+    delivered: 'border-emerald-600 outline outline-3 outline-emerald-600/10',
+    picked_up: 'border-teal-600 outline outline-3 outline-teal-600/10',
+    canceled: 'border-red-600 outline outline-3 outline-red-600/10',
+  }
+
+  return colorMap[statusEnum] || 'border-border'
+}
+
 const filteredActivities = computed(() => {
   let filtered = props.activities
 
@@ -233,20 +267,20 @@ const filteredActivities = computed(() => {
     const query = searchQuery.value.toLowerCase()
     filtered = filtered.filter((activity) => {
       // Search in message
-      if (activity.details.message.toLowerCase().includes(query)) return true
+      if (activity.details.message?.toLowerCase().includes(query)) return true
 
       // Search in user name
       if (activity.user.toLowerCase().includes(query)) return true
 
       // Search in item name
-      if (activity.item?.name.toLowerCase().includes(query)) return true
+      if (activity.details.itemName?.toLowerCase().includes(query)) return true
 
       // Search in customer name
-      if (activity.order?.customer.toLowerCase().includes(query)) return true
+      if (activity.details.customerName?.toLowerCase().includes(query)) return true
 
       // Search in order ID
-      if (activity.order?.externalId?.toLowerCase().includes(query)) return true
-      if (activity.order?.id.toLowerCase().includes(query)) return true
+      if (activity.details.orderExternalId?.toLowerCase().includes(query)) return true
+      if (activity.order_id?.toLowerCase().includes(query)) return true
 
       // Search in note content
       if (activity.details.note?.toLowerCase().includes(query)) return true
@@ -270,25 +304,29 @@ const filteredActivities = computed(() => {
 
   // Apply display filter
   if (displayFilter.value === 'new') {
-    filtered = filtered.filter(activity => !activity.seen)
+    filtered = filtered.filter(activity => !activityStore.isSeen(activity.id))
   } else if (displayFilter.value === 'seen') {
-    filtered = filtered.filter(activity => activity.seen)
+    filtered = filtered.filter(activity => activityStore.isSeen(activity.id))
   }
 
   // Apply important filter
   if (showImportantOnly.value) {
-    filtered = filtered.filter(activity => activity.important)
+    filtered = filtered.filter(activity => activityStore.isImportant(activity.id))
   }
 
   // Sort: important first, then unseen, then seen, then by timestamp
   return [...filtered].sort((a, b) => {
     // Important items always at the top
-    if (a.important && !b.important) return -1
-    if (!a.important && b.important) return 1
+    const aImportant = activityStore.isImportant(a.id)
+    const bImportant = activityStore.isImportant(b.id)
+    if (aImportant && !bImportant) return -1
+    if (!aImportant && bImportant) return 1
 
     // Then unseen before seen
-    if (!a.seen && b.seen) return -1
-    if (a.seen && !b.seen) return 1
+    const aSeen = activityStore.isSeen(a.id)
+    const bSeen = activityStore.isSeen(b.id)
+    if (!aSeen && bSeen) return -1
+    if (aSeen && !bSeen) return 1
 
     // Finally by timestamp (newest first)
     return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
@@ -433,13 +471,11 @@ const filteredActivities = computed(() => {
       <div
         v-for="activity in filteredActivities"
         :key="activity.id"
-        @click="activity.order && emit('activity-click', activity.order.id)"
+        @click="activity.order_id && emit('activity-click', activity.order_id)"
         :class="[
           'relative rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer',
-          activity.seen ? 'p-2' : 'p-3',
-          activity.important ? 'border-orange-600 dark:border-orange-900 shadow-orange-100 shadow-sm outline outline-4 outline-orange-600/10' : '',
-          !activity.seen && !activity.important && activity.user !== authStore.currentUser?.name ? 'outline outline-4 outline-green-600/10 border-green-600' : '',
-          !activity.seen && activity.important ? 'outline outline-3 outline-orange-600/10' : ''
+          activityStore.isSeen(activity.id) ? 'p-2' : 'p-3',
+          getActivityBorderClasses(activity)
         ]"
       >
         <!-- Row 1: Icon, Title -->
@@ -454,35 +490,35 @@ const filteredActivities = computed(() => {
         </div>
 
         <!-- Row 2: Content (collapsed if seen) -->
-        <div v-if="!activity.seen" class="space-y-1 p-2">
+        <div v-if="!activityStore.isSeen(activity.id)" class="space-y-1 p-2">
             <!-- Item/Order Info -->
-            <div v-if="activity.item" class="text-xs text-muted-foreground">
-              <span class="font-medium">{{ activity.item.name }}</span>
+            <div v-if="activity.details.itemName" class="text-xs text-muted-foreground">
+              <span class="font-medium">{{ activity.details.itemName }}</span>
             </div>
-            <div v-if="activity.order" class="text-xs text-muted-foreground pb-4">
-              Order #{{ activity.order.externalId || activity.order.id.slice(0, 8) }} • {{ activity.order.customer }}
+            <div v-if="activity.order_id" class="text-xs text-muted-foreground pb-4">
+              Order #{{ activity.details.orderExternalId || activity.order_id.slice(0, 8) }} • {{ activity.details.customerName }}
             </div>
 
             <!-- Status Display -->
             <div class="flex items-center gap-2">
               <template v-if="activity.type === 'status_change' && activity.details.from && activity.details.to">
-                <Badge :variant="getStatusVariant(activity.details.from as any)" class="text-xs">
+                <div :class="['inline-flex items-center rounded-xl border px-2.5 py-0.5 text-xs', getStatusBadgeClasses(activity.details.from)]">
                   {{ formatStatusText(activity.details.from) }}
-                </Badge>
+                </div>
                 <span class="text-xs text-muted-foreground">→</span>
-                <Badge :variant="getStatusVariant(activity.details.to as any)" class="text-xs">
+                <div :class="['inline-flex items-center rounded-xl border px-2.5 py-0.5 text-xs', getStatusBadgeClasses(activity.details.to)]">
                   {{ formatStatusText(activity.details.to) }}
-                </Badge>
+                </div>
               </template>
               <template v-else-if="getCurrentStatus(activity)">
-                <Badge :variant="getStatusVariant(getCurrentStatus(activity)! as any)" class="text-xs">
+                <div :class="['inline-flex items-center rounded-xl border px-2.5 py-0.5 text-xs', getStatusBadgeClasses(getCurrentStatus(activity)!)]">
                   {{ formatStatusText(getCurrentStatus(activity)!) }}
-                </Badge>
+                </div>
               </template>
               <!-- Alert Level Display -->
-              <template v-else-if="activity.type === 'alert' && activity.alert">
-                <Badge :variant="activity.alert.level === 'critical' ? 'destructive' : 'warning'" class="text-xs">
-                  {{ activity.alert.level === 'critical' ? 'Critical' : 'Warning' }}
+              <template v-else-if="activity.type === 'alert' && activity.details.alertLevel">
+                <Badge :variant="activity.details.alertLevel === 'critical' ? 'destructive' : 'warning'" class="text-xs">
+                  {{ activity.details.alertLevel === 'critical' ? 'Critical' : 'Warning' }}
                 </Badge>
               </template>
             </div>
@@ -508,11 +544,11 @@ const filteredActivities = computed(() => {
         <!-- Collapsed view for seen activities -->
         <div v-else class="px-2 py-1 space-y-1">
           <!-- Item/Order Info -->
-          <div v-if="activity.item" class="text-xs text-muted-foreground">
-            <span class="font-medium">{{ activity.item.name }}</span>
+          <div v-if="activity.details.itemName" class="text-xs text-muted-foreground">
+            <span class="font-medium">{{ activity.details.itemName }}</span>
           </div>
-          <div v-if="activity.order" class="text-xs text-muted-foreground">
-            Order #{{ activity.order.externalId || activity.order.id.slice(0, 8) }} • {{ activity.order.customer }}
+          <div v-if="activity.order_id" class="text-xs text-muted-foreground">
+            Order #{{ activity.details.orderExternalId || activity.order_id.slice(0, 8) }} • {{ activity.details.customerName }}
           </div>
 
           <div class="flex items-center gap-2 text-xs text-muted-foreground pt-1">
@@ -526,7 +562,7 @@ const filteredActivities = computed(() => {
           <Button
             variant="outline"
             size="sm"
-            @click="activity.order && emit('activity-click', activity.order.id)"
+            @click="activity.order_id && emit('activity-click', activity.order_id)"
             class="flex-1 h-7 text-xs"
           >
             Open
@@ -537,16 +573,16 @@ const filteredActivities = computed(() => {
             @click="handleToggleSeen(activity.id, $event)"
             class="h-7 text-xs px-2 flex items-center gap-1.5"
           >
-            <component :is="activity.seen ? EyeOff : Eye" class="h-3 w-3" />
-            <span>{{ activity.seen ? 'Mark as new' : 'Mark as seen' }}</span>
+            <component :is="activityStore.isSeen(activity.id) ? EyeOff : Eye" class="h-3 w-3" />
+            <span>{{ activityStore.isSeen(activity.id) ? 'Mark as new' : 'Mark as seen' }}</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
             @click="handleToggleImportant(activity.id, $event)"
-            :class="activity.important ? 'h-7 w-7 p-0 text-orange-600 hover:text-orange-700 border-orange-600' : 'h-7 w-7 p-0'"
+            :class="activityStore.isImportant(activity.id) ? 'h-7 w-7 p-0 text-orange-600 hover:text-orange-700 border-orange-600' : 'h-7 w-7 p-0'"
           >
-            <Star :class="activity.important ? 'h-3 w-3 fill-orange-600' : 'h-3 w-3'" />
+            <Star :class="activityStore.isImportant(activity.id) ? 'h-3 w-3 fill-orange-600' : 'h-3 w-3'" />
           </Button>
         </div>
       </div>

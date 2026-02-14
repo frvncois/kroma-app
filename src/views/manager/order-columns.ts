@@ -19,6 +19,7 @@ const paymentOptions = paymentOptionsWithoutAll
  */
 export interface ColumnCallbacks {
   onOpenDetail: (orderId: string) => void
+  getCommentsCount: (orderId: string) => number
 }
 
 /**
@@ -128,8 +129,8 @@ export function createColumns(callbacks: ColumnCallbacks): ColumnDef<OrderWithDe
     accessorKey: 'comments_count',
     header: 'Notes',
     cell: ({ row }) => {
-      // TODO: Compute comments_count from notes/comments
-      const commentsCount = 0
+      const orderId = row.original.id
+      const commentsCount = callbacks.getCommentsCount(orderId)
       return h('div', { class: 'flex items-center gap-1.5' }, [
         h('svg', {
           class: 'h-4 w-4 text-muted-foreground',

@@ -76,13 +76,13 @@ const validateForm = (): boolean => {
   return errors.length === 0
 }
 
-const createCustomer = () => {
+const createCustomer = async () => {
   if (!validateForm()) {
     return
   }
 
   try {
-    const newCustomer = addCustomer({
+    const newCustomer = await addCustomer({
       name: name.value.trim(),
       email: email.value.trim(),
       phone: phone.value.trim(),
@@ -90,6 +90,10 @@ const createCustomer = () => {
       address: address.value.trim(),
       notes: notes.value.trim(),
     })
+
+    if (!newCustomer) {
+      throw new Error('Failed to create customer')
+    }
 
     toast({
       title: 'Customer created',

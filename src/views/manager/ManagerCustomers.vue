@@ -196,8 +196,8 @@ const sortedCustomers = computed(() => {
 // Activity handlers
 const handleActivityClick = (activityId: string) => {
   const activity = activities.value.find((a) => a.id === activityId)
-  if (activity?.order?.id) {
-    selectedOrderId.value = activity.order.id
+  if (activity?.order_id) {
+    selectedOrderId.value = activity.order_id
     isOrderSheetOpen.value = true
   }
 }

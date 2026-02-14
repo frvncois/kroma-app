@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { usePrintshops } from '@/composables/usePrintshops'
+import { useDriverTaskStore } from '@/stores/driver-tasks'
+import { useNoteStore } from '@/stores/notes'
+import { useAuthStore } from '@/stores/auth'
+import { useToast } from '@/composables/useToast'
 import Sheet from '@/components/ui/Sheet.vue'
 import Card from '@/components/ui/Card.vue'
 import CardContent from '@/components/ui/CardContent.vue'
@@ -26,6 +30,10 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const { getPrintshops } = usePrintshops()
+const driverTaskStore = useDriverTaskStore()
+const noteStore = useNoteStore()
+const authStore = useAuthStore()
+const { toast } = useToast()
 
 // Task details
 type TaskType = 'pickup' | 'dropoff' | 'other'
@@ -195,31 +203,91 @@ const validateForm = (): boolean => {
   return validationErrors.value.length === 0
 }
 
-const createTask = () => {
-  if (!validateForm()) {
+const createTask = async () => {
+  if (!taskTitle.value.trim() || !taskLocation.value) {
+    toast({
+      title: 'Missing information',
+      description: 'Please fill in all required fields',
+      variant: 'destructive',
+    })
     return
   }
 
-  const taskData = {
-    title: taskTitle.value,
-    type: taskType.value,
-    priority: taskPriority.value,
-    details: taskDetails.value,
-    location: taskLocation.value === 'other' ? customAddress.value : taskLocation.value,
-    completeBy: completeBy.value,
-    notes: notes.value,
-    createdAt: new Date().toISOString(),
-    status: 'pending',
+  // Determine address and coordinates
+  let address = ''
+  let lat: number | null = null
+  let lng: number | null = null
+
+  if (taskLocation.value === 'other') {
+    if (!customAddress.value.trim()) {
+      toast({
+        title: 'Missing address',
+        description: 'Please enter a custom address',
+        variant: 'destructive',
+      })
+      return
+    }
+    address = customAddress.value
+  } else {
+    // Get printshop address
+    const shop = getPrintshops().find((s) => s.id === taskLocation.value)
+    if (shop) {
+      address = shop.address
+      lat = shop.lat
+      lng = shop.lng
+    }
   }
 
-  console.log('Creating driver task:', taskData)
+  if (!authStore.currentUser) {
+    toast({
+      title: 'Authentication error',
+      description: 'You must be logged in to create tasks',
+      variant: 'destructive',
+    })
+    return
+  }
 
-  const mockTaskId = `task-${Date.now()}`
-  alert('Driver task created successfully!')
+  // Create the task
+  const newTask = await driverTaskStore.createTask({
+    created_by: authStore.currentUser.id,
+    assigned_to: authStore.currentUser.id, // For now, assign to self
+    title: taskTitle.value.trim(),
+    type: taskType.value,
+    priority: taskPriority.value,
+    details: taskDetails.value.trim(),
+    address,
+    lat,
+    lng,
+    complete_by: completeBy.value,
+  })
 
-  emit('taskCreated', mockTaskId)
+  if (!newTask) {
+    toast({
+      title: 'Error',
+      description: 'Failed to create task',
+      variant: 'destructive',
+    })
+    return
+  }
+
+  // Save any notes
+  for (const note of notes.value) {
+    await noteStore.addNote(
+      'driver_task',
+      newTask.id,
+      note.content,
+      ['everyone'] // Driver tasks visible to everyone
+    )
+  }
+
+  toast({
+    title: 'Task created',
+    description: `${newTask.title} has been added to your queue`,
+  })
+
+  // Emit event and close sheet
+  emit('taskCreated', newTask.id)
   emit('update:open', false)
-
   resetForm()
 }
 

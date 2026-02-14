@@ -3,10 +3,13 @@ import { ref, computed, watch } from 'vue'
 import { useOrders } from '@/composables/useOrders'
 import { usePrintshops } from '@/composables/usePrintshops'
 import { useAuthStore } from '@/stores/auth'
+import { useNoteStore } from '@/stores/notes'
+import { useFileStore } from '@/stores/files'
 import { useToast } from '@/composables/useToast'
+import { downloadFile } from '@/lib/file-service'
 import { formatStatus as libFormatStatus } from '@/lib/formatters'
 import { getStatusVariant } from '@/lib/variants'
-import type { PaymentStatus, PaymentMethod, ItemStatus, OrderNote, NoteDepartment } from '@/types'
+import type { PaymentStatus, PaymentMethod, ItemStatus, NoteDepartment } from '@/types'
 import Sheet from '@/components/ui/Sheet.vue'
 import Card from '@/components/ui/Card.vue'
 import CardContent from '@/components/ui/CardContent.vue'
@@ -51,11 +54,14 @@ const {
   updateItemPrintshop,
   updateItemDueDate,
   updateOrderPaymentStatus,
-  updateOrderPaymentMethod
+  updateOrderPaymentMethod,
+  fetchItemStatusHistory
 } = useOrders()
 const { getPrintshops, getPrintshopName } = usePrintshops()
 const { toast } = useToast()
 const authStore = useAuthStore()
+const noteStore = useNoteStore()
+const fileStore = useFileStore()
 
 const order = computed(() => (props.orderId ? getOrderById(props.orderId) : null))
 
@@ -74,21 +80,46 @@ const filteredItems = computed(() => {
   return order.value.items
 })
 
-// Filtered files based on filtered items
+// Get all files for filtered items
 const filteredFiles = computed(() => {
-  const itemNames = new Set(filteredItems.value.map(item => item.product_name))
-  return files.value.filter(file => itemNames.has(file.item_name))
+  const allFiles: any[] = []
+
+  filteredItems.value.forEach((item) => {
+    const itemFiles = fileStore.getFilesForEntity('order_item', item.id)
+    // Add item reference to each file for display
+    itemFiles.forEach((file) => {
+      allFiles.push({
+        ...file,
+        item_name: item.product_name,
+      })
+    })
+  })
+
+  return allFiles
 })
 
-// Filtered notes based on department and item reference
+// Filtered notes based on department and entity reference
 const filteredNotes = computed(() => {
+  if (!props.orderId) return []
+
+  // Get all notes for this order and its items
+  const orderNotes = noteStore.getNotesForEntity('order', props.orderId)
+
+  // Get notes for all items (for visibility)
+  const itemIds = filteredItems.value.map(item => item.id)
+  const itemNotes = itemIds.flatMap(itemId =>
+    noteStore.getNotesForEntity('order_item', itemId)
+  )
+
+  const allNotes = [...orderNotes, ...itemNotes]
+
   // Allowed departments for printshop managers and drivers
   const allowedDepartments: NoteDepartment[] = ['everyone', 'printshop', 'delivery']
 
-  // Item names from filtered items
-  const itemNames = new Set(filteredItems.value.map(item => item.product_name))
+  // Item IDs from filtered items
+  const allowedItemIds = new Set(filteredItems.value.map(item => item.id))
 
-  return notes.value.filter(note => {
+  return allNotes.filter(note => {
     // Check if note is for an allowed department
     const hasAllowedDepartment = note.departments.some(dept =>
       allowedDepartments.includes(dept)
@@ -96,11 +127,15 @@ const filteredNotes = computed(() => {
 
     if (!hasAllowedDepartment) return false
 
-    // If note has no item reference, include it
-    if (!note.item_reference) return true
+    // If note is order-level, include it
+    if (note.entity_type === 'order') return true
 
-    // If note has item reference, check if it's in our filtered items
-    return itemNames.has(note.item_reference)
+    // If note is item-level, check if it's for one of our filtered items
+    if (note.entity_type === 'order_item') {
+      return allowedItemIds.has(note.entity_id)
+    }
+
+    return false
   })
 })
 
@@ -114,79 +149,98 @@ const itemAssignments = ref<Record<string, string | null>>({})
 const itemStatuses = ref<Record<string, ItemStatus>>({})
 const itemDueDates = ref<Record<string, string | null>>({})
 
-// Notes management
-const notes = ref<OrderNote[]>([
-  {
-    id: 'note-1',
-    content: 'Customer requested rush delivery for this order.',
-    departments: ['everyone'],
-    created_at: '2024-01-25T09:15:00Z',
-    created_by: 'John Smith',
-    item_reference: null
-  },
-  {
-    id: 'note-2',
-    content: 'Please use premium cardstock for this item.',
-    departments: ['printshop'],
-    created_at: '2024-01-25T10:30:00Z',
-    created_by: 'Sarah Johnson',
-    item_reference: 'Business Cards - Premium Matte'
-  },
-  {
-    id: 'note-3',
-    content: 'Awaiting payment confirmation before proceeding.',
-    departments: ['billing'],
-    created_at: '2024-01-25T11:45:00Z',
-    created_by: 'Mike Davis',
-    item_reference: null
-  }
-])
+// Notes management - now handled by noteStore
 
-// Dummy files
-interface OrderFile {
-  id: string
-  name: string
-  type: string
-  size: string
-  uploaded_at: string
-  item_name: string
+// File management
+const uploadingFiles = ref(false)
+
+async function handleFileDownload(file: any) {
+  try {
+    await downloadFile(file.file_url, file.file_name)
+    toast({
+      title: 'Download started',
+      description: `Downloading ${file.file_name}`,
+    })
+  } catch (error) {
+    console.error('Download failed:', error)
+    toast({
+      title: 'Download failed',
+      description: 'Could not download file',
+      variant: 'destructive',
+    })
+  }
 }
 
-const files = ref<OrderFile[]>([
-  {
-    id: 'file-1',
-    name: 'artwork-final.pdf',
-    type: 'PDF',
-    size: '2.4 MB',
-    uploaded_at: '2024-01-25T10:30:00Z',
-    item_name: 'Business Cards - Premium Matte'
-  },
-  {
-    id: 'file-2',
-    name: 'logo-highres.png',
-    type: 'PNG',
-    size: '856 KB',
-    uploaded_at: '2024-01-25T10:32:00Z',
-    item_name: 'Business Cards - Premium Matte'
-  },
-  {
-    id: 'file-3',
-    name: 'specifications.docx',
-    type: 'DOCX',
-    size: '124 KB',
-    uploaded_at: '2024-01-25T11:15:00Z',
-    item_name: 'Flyers - 8.5x11 Full Color'
+async function handleFileUpload(itemId: string, event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file || !authStore.currentUser) return
+
+  uploadingFiles.value = true
+
+  try {
+    const uploadedFile = await fileStore.uploadFile(
+      'order_item',
+      itemId,
+      file,
+      'artwork', // Default to artwork, could make this selectable
+      authStore.currentUser.id
+    )
+
+    if (uploadedFile) {
+      toast({
+        title: 'File uploaded',
+        description: `${file.name} uploaded successfully`,
+      })
+    } else {
+      throw new Error('Upload failed')
+    }
+  } catch (error) {
+    console.error('Upload error:', error)
+    toast({
+      title: 'Upload failed',
+      description: 'Could not upload file',
+      variant: 'destructive',
+    })
+  } finally {
+    uploadingFiles.value = false
+    // Reset input
+    input.value = ''
   }
-])
+}
 
 // Track expanded items
 const expandedItems = ref<Set<string>>(new Set())
 
-const toggleItemExpanded = (itemId: string) => {
+// Track loaded status history per item (lazy-loaded)
+const itemStatusHistory = ref<Map<string, any[]>>(new Map())
+const loadingHistory = ref<Set<string>>(new Set())
+
+const toggleItemExpanded = async (itemId: string) => {
   if (expandedItems.value.has(itemId)) {
     expandedItems.value.delete(itemId)
   } else {
     expandedItems.value.add(itemId)
+    // Lazy-load status history when item is expanded
+    await loadStatusHistory(itemId)
+  }
+}
+
+const loadStatusHistory = async (itemId: string) => {
+  // Skip if already loaded or currently loading
+  if (itemStatusHistory.value.has(itemId) || loadingHistory.value.has(itemId)) {
+    return
+  }
+
+  loadingHistory.value.add(itemId)
+
+  try {
+    const history = await fetchItemStatusHistory(itemId)
+    itemStatusHistory.value.set(itemId, history)
+  } catch (error) {
+    console.error('Failed to load status history:', error)
+  } finally {
+    loadingHistory.value.delete(itemId)
   }
 }
 
@@ -197,7 +251,7 @@ watch(
     if (newOrder) {
       paymentStatus.value = newOrder.payment_status
       paymentMethod.value = newOrder.payment_method
-      orderNotes.value = newOrder.notes
+      orderNotes.value = newOrder.internal_notes
 
       newOrder.items.forEach((item) => {
         itemAssignments.value[item.id] = item.assigned_printshop
@@ -208,6 +262,50 @@ watch(
   },
   { immediate: true }
 )
+
+// Subscribe to notes when order changes
+watch(() => props.orderId, async (newOrderId) => {
+  if (newOrderId) {
+    await noteStore.subscribeToNotes('order', newOrderId)
+
+    // Also subscribe to notes for all items in the order
+    const currentOrder = getOrderById(newOrderId)
+    if (currentOrder) {
+      for (const item of currentOrder.items) {
+        await noteStore.subscribeToNotes('order_item', item.id)
+      }
+    }
+  }
+}, { immediate: true })
+
+// Subscribe to files when order changes
+watch(() => props.orderId, async (newOrderId) => {
+  if (newOrderId) {
+    // Subscribe to files for all items in the order
+    const currentOrder = getOrderById(newOrderId)
+    if (currentOrder) {
+      for (const item of currentOrder.items) {
+        await fileStore.subscribeToFiles('order_item', item.id)
+      }
+    }
+  }
+}, { immediate: true })
+
+// Unsubscribe from notes and files when sheet closes
+watch(() => props.isOpen, (isOpen, wasOpen) => {
+  if (!isOpen && wasOpen && props.orderId) {
+    noteStore.unsubscribeFromNotes('order', props.orderId)
+
+    // Also unsubscribe from item notes and files
+    const currentOrder = getOrderById(props.orderId)
+    if (currentOrder) {
+      for (const item of currentOrder.items) {
+        noteStore.unsubscribeFromNotes('order_item', item.id)
+        fileStore.unsubscribeFromFiles('order_item', item.id)
+      }
+    }
+  }
+})
 
 const formatDate = (dateString: string): string => {
   const date = new Date(dateString)
@@ -231,7 +329,15 @@ const formatStatus = (status: ItemStatus): string => {
     .join(' ')
 }
 
-const formatSpecs = (specs: Record<string, any>): string => {
+const formatSpecs = (specs: Record<string, any> | string | null): string => {
+  if (!specs) return ''
+
+  // If specs is a string, just return it as-is
+  if (typeof specs === 'string') {
+    return specs
+  }
+
+  // If specs is an object, format it as key-value pairs
   return Object.entries(specs)
     .map(([key, value]) => `${key}: ${value}`)
     .join(', ')
@@ -362,31 +468,51 @@ const handlePaymentMethodChange = (method: string | string[]) => {
 }
 
 // Note handlers
-const handleAddNote = (content: string, departments: NoteDepartment[], itemReference: string | null) => {
-  const note: OrderNote = {
-    id: `note-${Date.now()}`,
+const handleAddNote = async (content: string, departments: NoteDepartment[], itemReference: string | null) => {
+  if (!props.orderId) return
+
+  // Determine entity_type and entity_id based on itemReference
+  let entity_type: 'order' | 'order_item' = 'order'
+  let entity_id = props.orderId
+
+  if (itemReference && itemReference !== 'order' && order.value) {
+    // itemReference is product_name, need to find the item ID
+    const item = order.value.items.find(i => i.product_name === itemReference)
+    if (item) {
+      entity_type = 'order_item'
+      entity_id = item.id
+    }
+  }
+
+  const newNote = await noteStore.addNote(
+    entity_type,
+    entity_id,
     content,
-    departments,
-    created_at: new Date().toISOString(),
-    created_by: 'Current User', // TODO: Replace with actual user
-    item_reference: itemReference
-  }
+    departments
+  )
 
-  notes.value.unshift(note)
-  console.log('Added note:', note)
+  if (newNote) {
+    console.log('Added note:', newNote)
+  }
 }
 
-const handleEditNote = (noteId: string, newContent: string) => {
-  const note = notes.value.find(n => n.id === noteId)
+const handleEditNote = async (noteId: string, newContent: string) => {
+  if (!props.orderId) return
+
+  // Find the note to determine its entity type
+  const note = filteredNotes.value.find(n => n.id === noteId)
   if (note) {
-    note.content = newContent
+    await noteStore.updateNote(noteId, newContent, note.entity_type, note.entity_id)
   }
 }
 
-const handleDeleteNote = (noteId: string) => {
-  const index = notes.value.findIndex(n => n.id === noteId)
-  if (index !== -1) {
-    notes.value.splice(index, 1)
+const handleDeleteNote = async (noteId: string) => {
+  if (!props.orderId) return
+
+  // Find the note to determine its entity type
+  const note = filteredNotes.value.find(n => n.id === noteId)
+  if (note) {
+    await noteStore.deleteNote(noteId, note.entity_type, note.entity_id)
   }
 }
 
@@ -412,7 +538,7 @@ const departmentOptions = [
   <Sheet
     :open="isOpen"
     @update:open="(val) => emit('update:isOpen', val)"
-    :title="order ? `Order ${order.external_id || order.id.toUpperCase()}` : 'Order Details'"
+    :title="order ? `Order ${order.external_id || '#' + order.id.slice(0, 8)}` : 'Order Details'"
     :side="side"
     :z-index="zIndex"
   >
@@ -430,8 +556,8 @@ const departmentOptions = [
             </div>
             Customer & Order Information
           </h3>
-          <Badge :variant="order.delivery_method === 'delivery' ? 'default' : 'secondary'">
-            {{ order.delivery_method === 'delivery' ? 'To deliver' : 'Customer pickup' }}
+          <Badge :variant="order.deliveryMethodRollup === 'delivery' ? 'default' : 'secondary'">
+            {{ order.deliveryMethodRollup === 'delivery' ? 'To deliver' : 'Customer pickup' }}
           </Badge>
         </div>
         <Card>
@@ -598,11 +724,19 @@ const departmentOptions = [
                 />
 
                 <!-- Status History -->
-                <div v-if="item.status_history && item.status_history.length > 0" class="space-y-2">
+                <div class="space-y-2">
                   <div class="text-sm font-medium">Status History</div>
-                  <div class="space-y-2">
+
+                  <!-- Loading state -->
+                  <div v-if="loadingHistory.has(item.id)" class="flex items-center gap-2 text-xs text-muted-foreground">
+                    <div class="animate-spin rounded-full h-3 w-3 border-b-2 border-primary"></div>
+                    <span>Loading history...</span>
+                  </div>
+
+                  <!-- History loaded -->
+                  <div v-else-if="itemStatusHistory.has(item.id) && itemStatusHistory.get(item.id)!.length > 0" class="space-y-2">
                     <div
-                      v-for="(history, index) in item.status_history"
+                      v-for="(history, index) in itemStatusHistory.get(item.id)"
                       :key="index"
                       class="flex items-start gap-3 text-xs"
                     >
@@ -622,6 +756,11 @@ const departmentOptions = [
                       </div>
                     </div>
                   </div>
+
+                  <!-- No history -->
+                  <div v-else class="text-xs text-muted-foreground">
+                    No status changes yet
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -631,12 +770,28 @@ const departmentOptions = [
 
       <!-- Files Section -->
       <div v-if="showFiles">
-        <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-          <div class="p-2 bg-accent rounded-lg">
-            <Paperclip class="h-4 w-4" />
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold flex items-center gap-2">
+            <div class="p-2 bg-accent rounded-lg">
+              <Paperclip class="h-4 w-4" />
+            </div>
+            Files ({{ filteredFiles.length }})
+          </h3>
+          <div v-if="authStore.isManager && filteredItems.length > 0">
+            <label class="cursor-pointer">
+              <Button variant="outline" size="sm" :disabled="uploadingFiles" as="span">
+                <Paperclip class="h-4 w-4 mr-2" />
+                {{ uploadingFiles ? 'Uploading...' : 'Upload File' }}
+              </Button>
+              <input
+                type="file"
+                class="hidden"
+                @change="(e) => filteredItems[0] && handleFileUpload(filteredItems[0].id, e)"
+                :disabled="uploadingFiles"
+              />
+            </label>
           </div>
-          Files ({{ filteredFiles.length }})
-        </h3>
+        </div>
         <div v-if="filteredFiles.length === 0">
           <Card>
             <CardContent class="p-8">
@@ -659,18 +814,20 @@ const departmentOptions = [
                     <FileText class="h-5 w-5 text-muted-foreground" />
                   </div>
                   <div class="flex-1 min-w-0">
-                    <div class="font-medium text-sm truncate">{{ file.name }}</div>
+                    <div class="font-medium text-sm truncate">{{ file.file_name }}</div>
                     <div class="text-xs text-muted-foreground">
                       {{ file.item_name }}
                     </div>
-                    <div class="text-xs text-muted-foreground">
-                      {{ file.type }} • {{ file.size }} • {{ formatDate(file.uploaded_at) }}
+                    <div class="text-xs text-muted-foreground flex items-center gap-2">
+                      <Badge variant="outline" size="sm">{{ file.file_type }}</Badge>
+                      <span>{{ formatDate(file.created_at) }}</span>
                     </div>
                   </div>
                 </div>
                 <button
                   class="flex-shrink-0 rounded-md p-2 transition-colors hover:bg-accent"
                   title="Download file"
+                  @click="handleFileDownload(file)"
                 >
                   <Download class="h-4 w-4 text-muted-foreground" />
                 </button>

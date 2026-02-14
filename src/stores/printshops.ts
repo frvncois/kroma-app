@@ -1,11 +1,37 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Printshop } from '@/types'
-import { printshops as mockPrintshops } from '@/data/mock/printshops'
+import { supabase } from '@/lib/supabase'
 
 export const usePrintshopStore = defineStore('printshops', () => {
   // State
-  const printshops = ref<Printshop[]>(mockPrintshops)
+  const printshops = ref<Printshop[]>([])
+
+  // Actions
+  async function fetchPrintshops() {
+    try {
+      const { data, error } = await supabase
+        .from('printshops')
+        .select('*')
+        .order('name')
+
+      if (error) {
+        console.error('Error fetching printshops:', error)
+        return
+      }
+
+      if (data) {
+        printshops.value = data as Printshop[]
+        console.log('Printshops loaded:', data.length)
+      }
+    } catch (error) {
+      console.error('Failed to fetch printshops:', error)
+    }
+  }
+
+  async function init() {
+    await fetchPrintshops()
+  }
 
   // Getters
   const allPrintshops = computed(() => printshops.value)
@@ -28,5 +54,9 @@ export const usePrintshopStore = defineStore('printshops', () => {
     allPrintshops,
     getPrintshopById,
     getPrintshopName,
+
+    // Actions
+    fetchPrintshops,
+    init,
   }
 })

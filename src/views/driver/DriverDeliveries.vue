@@ -93,7 +93,7 @@ const allStopsCompleted = computed(() => {
 // Orders eligible for delivery — exclude items assigned to other drivers
 const deliverableOrders = computed(() => {
   return orderStore.ordersWithDetails.filter(order => {
-    if (order.delivery_method !== 'delivery') return false
+    if (order.deliveryMethodRollup !== 'delivery') return false
     return order.items.some(item =>
       (item.status === 'ready' || item.status === 'out_for_delivery') &&
       !driverStore.isItemAssignedToOtherDriver(item.id)
@@ -369,7 +369,7 @@ watch(
     // Find all currently ready delivery items
     const currentReadyIds = new Set<string>()
     for (const order of orders) {
-      if (order.delivery_method !== 'delivery') continue
+      if (order.deliveryMethodRollup !== 'delivery') continue
       for (const item of order.items) {
         if (item.status === 'ready' && !driverStore.isItemAssignedToOtherDriver(item.id)) {
           currentReadyIds.add(item.id)
@@ -405,7 +405,7 @@ async function addPendingToRoute() {
 
     // Build stop inputs for new items
     for (const order of orderStore.ordersWithDetails) {
-      if (order.delivery_method !== 'delivery') continue
+      if (order.deliveryMethodRollup !== 'delivery') continue
       const newItems = order.items.filter(i => pendingIds.has(i.id))
       if (newItems.length === 0) continue
 
@@ -586,23 +586,18 @@ function submitConfirmation() {
     )
 
     activityStore.addActivity({
-      id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       type: 'note_added',
-      timestamp: new Date().toISOString(),
       user: authStore.currentUser?.name || 'Driver',
-      seen: false,
-      important: false,
-      item: {
-        id: item.id,
-        name: item.product_name,
-        orderId: item.order_id,
-      },
-      order: order ? {
-        id: order.id,
-        externalId: order.external_id || undefined,
-        customer: stop.customerName || order.customer?.name || 'Unknown',
-      } : undefined,
+      user_id: authStore.currentUser?.id || '',
+      entity_type: 'order_item',
+      entity_id: item.id,
+      order_id: order?.id || null,
+      printshop_id: item.assigned_printshop || null,
       details: {
+        itemName: item.product_name,
+        orderId: order?.id,
+        orderExternalId: order?.external_id || undefined,
+        customerName: stop.customerName || order?.customer?.name || 'Unknown',
         message: `${stop.type === 'pickup' ? 'Pickup' : 'Delivery'} completed${confirmPhotos.value.length > 0 ? ` (${confirmPhotos.value.length} photo${confirmPhotos.value.length !== 1 ? 's' : ''} attached)` : ''}`,
         note: confirmNote.value.trim() || undefined,
       },
@@ -753,23 +748,18 @@ const submitIssue = () => {
 
   // Create activity with the note
   activityStore.addActivity({
-    id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     type: 'note_added',
-    timestamp: new Date().toISOString(),
     user: authStore.currentUser?.name || 'Driver',
-    seen: false,
-    important: false,
-    item: {
-      id: item.id,
-      name: item.product_name,
-      orderId: item.order_id,
-    },
-    order: order ? {
-      id: order.id,
-      externalId: order.external_id || undefined,
-      customer: stop.customerName || order.customer?.name || 'Unknown',
-    } : undefined,
+    user_id: authStore.currentUser?.id || '',
+    entity_type: 'order_item',
+    entity_id: item.id,
+    order_id: order?.id || null,
+    printshop_id: item.assigned_printshop || null,
     details: {
+      itemName: item.product_name,
+      orderId: order?.id,
+      orderExternalId: order?.external_id || undefined,
+      customerName: stop.customerName || order?.customer?.name || 'Unknown',
       message: `${stop.type === 'pickup' ? 'Pickup' : 'Delivery'} issue reported by driver - Status: ${formatStatus(issueStatus.value)}${issuePhotos.value.length > 0 ? ` (${issuePhotos.value.length} photo${issuePhotos.value.length !== 1 ? 's' : ''} attached)` : ''}${rescheduleDate.value ? ` - Rescheduled for: ${rescheduleDate.value}` : ''}`,
       note: issueNote.value.trim(),
     },
@@ -953,7 +943,7 @@ const handleToggleImportant = (activityId: string) => {
           :class="[
             'p-3 rounded-lg border cursor-pointer transition-colors',
             stop.status === 'completed' ? 'bg-green-50 dark:bg-green-950/30 border-green-200' :
-            stop.hasIssue && stop.status !== 'completed' ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300' :
+            stop.hasIssue ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300' :
             stop.status === 'current' ? 'bg-accent border-primary ring-1 ring-primary' :
             'hover:bg-accent/50'
           ]"
@@ -965,7 +955,7 @@ const handleToggleImportant = (activityId: string) => {
                 <MapPin v-if="stop.type === 'pickup'" class="h-3 w-3 text-blue-500" />
                 <Truck v-else class="h-3 w-3 text-green-500" />
                 {{ stop.type === 'pickup' ? `Pickup: ${stop.printshopName}` : `Deliver: ${stop.customerName}` }}
-                <AlertTriangle v-if="stop.hasIssue && stop.status !== 'completed'" class="h-3 w-3 text-amber-500 flex-shrink-0" />
+                <AlertTriangle v-if="stop.hasIssue" class="h-3 w-3 text-amber-500 flex-shrink-0" />
                 <AlertCircle v-if="!stop.fitsInShift" class="h-3 w-3 text-red-500 flex-shrink-0" title="May not fit in shift" />
               </div>
               <div class="text-xs text-muted-foreground truncate">{{ stop.address }}</div>
