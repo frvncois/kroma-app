@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
 import { RouterView } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { usePrintshopStore } from '@/stores/printshops'
@@ -17,15 +17,29 @@ const activityStore = useActivityStore()
 const driverTaskStore = useDriverTaskStore()
 const fileStore = useFileStore()
 
-onMounted(async () => {
-  await authStore.init()
+async function initData() {
   await printshopStore.init()
   await customerStore.init()
   await orderStore.init()
   await activityStore.init()
   await driverTaskStore.init()
-  // Note: fileStore doesn't need init() - files are loaded on-demand per entity
+}
+
+onMounted(async () => {
+  await authStore.init()
+  if (authStore.isAuthenticated) {
+    await initData()
+  }
 })
+
+watch(
+  () => authStore.isAuthenticated,
+  async (isAuthenticated) => {
+    if (isAuthenticated) {
+      await initData()
+    }
+  }
+)
 </script>
 
 <template>

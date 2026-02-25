@@ -23,8 +23,8 @@ const toggleDropdown = () => {
   isOpen.value = !isOpen.value
 }
 
-const handleLogout = () => {
-  authStore.logout()
+const handleLogout = async () => {
+  await authStore.logout()
   isOpen.value = false
   router.push('/login')
 }
